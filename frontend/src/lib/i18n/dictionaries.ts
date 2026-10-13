@@ -59,6 +59,7 @@ const en = {
       'Sensitive actions require a recent password confirmation.',
     confirm_current: 'Current password',
     confirm_submit: 'Confirm password',
+    confirm_email_change: 'Confirm your password to change your email address.',
   },
   profile: {
     title: 'Your profile',
@@ -244,6 +245,22 @@ const en = {
     error: 'Something went wrong.',
     retry: 'Try again',
   },
+  backend_status: {
+    heading: 'Backend status',
+    available: 'API is available',
+    checking: 'Checking the API status…',
+    unreachable: 'Could not check the API status.',
+    explainer:
+      'Liveness confirms the HTTP application is running. PostgreSQL and Redis availability is checked by a separate readiness endpoint.',
+    retry: 'Retry the check',
+    check_again: 'Check again',
+    errors: {
+      network_error: 'No connection to the API.',
+      request_timeout: 'The API request timed out.',
+      service_unavailable: 'The service is temporarily unavailable.',
+      invalid_response: 'The API returned an invalid response.',
+    } as Record<string, string>,
+  },
   not_found: {
     title: 'This page is off the track.',
     body: 'The page you are looking for does not exist or was moved.',
@@ -312,6 +329,7 @@ const ru: Dictionary = {
       'Для важных действий требуется недавнее подтверждение пароля.',
     confirm_current: 'Текущий пароль',
     confirm_submit: 'Подтвердить пароль',
+    confirm_email_change: 'Подтвердите пароль, чтобы изменить адрес эл. почты.',
   },
   profile: {
     title: 'Ваш профиль',
@@ -497,6 +515,22 @@ const ru: Dictionary = {
     error: 'Что-то пошло не так.',
     retry: 'Повторить',
   },
+  backend_status: {
+    heading: 'Состояние backend',
+    available: 'API доступен',
+    checking: 'Проверяем состояние API…',
+    unreachable: 'Не удалось проверить состояние API.',
+    explainer:
+      'Liveness подтверждает работу HTTP-приложения. Доступность PostgreSQL и Redis проверяется отдельным readiness endpoint.',
+    retry: 'Повторить проверку',
+    check_again: 'Проверить снова',
+    errors: {
+      network_error: 'Нет соединения с API.',
+      request_timeout: 'Превышено время ожидания API.',
+      service_unavailable: 'Сервис временно недоступен.',
+      invalid_response: 'API вернул некорректный ответ.',
+    } as Record<string, string>,
+  },
   not_found: {
     title: 'Страница не найдена.',
     body: 'Такой страницы не существует или она была перемещена.',
@@ -562,6 +596,7 @@ const pl: Dictionary = {
       'Wrażliwe działania wymagają niedawnego potwierdzenia hasła.',
     confirm_current: 'Aktualne hasło',
     confirm_submit: 'Potwierdź hasło',
+    confirm_email_change: 'Potwierdź hasło, aby zmienić adres e-mail.',
   },
   profile: {
     title: 'Twój profil',
@@ -746,6 +781,22 @@ const pl: Dictionary = {
     loading: 'Ładowanie…',
     error: 'Coś poszło nie tak.',
     retry: 'Spróbuj ponownie',
+  },
+  backend_status: {
+    heading: 'Status backendu',
+    available: 'API jest dostępne',
+    checking: 'Sprawdzamy stan API…',
+    unreachable: 'Nie udało się sprawdzić stanu API.',
+    explainer:
+      'Liveness potwierdza działanie aplikacji HTTP. Dostępność PostgreSQL i Redis sprawdza osobny endpoint readiness.',
+    retry: 'Spróbuj ponownie',
+    check_again: 'Sprawdź ponownie',
+    errors: {
+      network_error: 'Brak połączenia z API.',
+      request_timeout: 'Przekroczono limit czasu żądania API.',
+      service_unavailable: 'Usługa jest chwilowo niedostępna.',
+      invalid_response: 'API zwróciło nieprawidłową odpowiedź.',
+    } as Record<string, string>,
   },
   not_found: {
     title: 'Ta strona zeszła z trasy.',

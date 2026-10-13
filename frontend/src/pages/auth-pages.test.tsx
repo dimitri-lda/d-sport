@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router';
@@ -52,6 +52,7 @@ function mockFetch(
   options: {
     loggedIn?: boolean;
     loginStatus?: number;
+    patchRequiresConfirmation?: boolean;
   } = {},
 ) {
   let loggedIn = options.loggedIn ?? false;
@@ -103,7 +104,21 @@ function mockFetch(
         ? respond(profilePayload)
         : respond({ error: { code: 'unauthorized', message: 'x' } }, 401);
     }
+    if (url === '/api/v1/auth/confirm-password' && method === 'GET') {
+      return respond({ data: { confirmed: false, confirmed_at: null } });
+    }
     if (url === '/api/v1/profile' && method === 'PATCH') {
+      if (options.patchRequiresConfirmation) {
+        return respond(
+          {
+            error: {
+              code: 'password_confirmation_required',
+              message: 'Confirm your password to change the email address.',
+            },
+          },
+          403,
+        );
+      }
       return respond({ data: { user: { ...user, display_name: 'Renamed' } } });
     }
     if (url === '/api/v1/store/home' || url.startsWith('/api/v1/products')) {
@@ -251,6 +266,27 @@ describe('identity pages', () => {
     // Prefilled identity + address data.
     expect(screen.getByLabelText('Display name')).toHaveValue('Flow User');
     expect(screen.getByLabelText('City')).toHaveValue('Berlin');
+    client.clear();
+  });
+
+  it('sends an unconfirmed email change to the confirm-password page', async () => {
+    mockFetch({ loggedIn: true, patchRequiresConfirmation: true });
+    const client = renderApp('/profile');
+
+    const account = await screen.findByRole('region', { name: 'Identity' });
+    const emailField = within(account).getByLabelText('Email');
+    await userEvent.clear(emailField);
+    await userEvent.type(emailField, 'renamed@example.test');
+    await userEvent.click(
+      within(account).getByRole('button', { name: 'Save changes' }),
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: 'Confirm your password' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Confirm your password to change your email address.'),
+    ).toBeInTheDocument();
     client.clear();
   });
 });

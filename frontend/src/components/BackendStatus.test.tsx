@@ -3,14 +3,34 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { createQueryClient } from '../api/queryClient';
+import { AppContext } from '../app/useApp';
+import type { AppContextValue } from '../app/useApp';
+import { dictionaries } from '../lib/i18n/dictionaries';
 import { BackendStatus } from './BackendStatus';
 
 function renderStatus() {
   const client = createQueryClient();
+  const app: AppContextValue = {
+    ready: true,
+    failed: false,
+    user: null,
+    market: null,
+    countries: [],
+    locales: ['en', 'ru', 'pl'],
+    csrfToken: null,
+    locale: 'en',
+    t: dictionaries.en,
+    refreshContext: () => Promise.resolve(null),
+    retryContext: () => {},
+    installContext: () => {},
+    signOut: () => Promise.resolve(),
+  };
   const result = render(
-    <QueryClientProvider client={client}>
-      <BackendStatus />
-    </QueryClientProvider>,
+    <AppContext.Provider value={app}>
+      <QueryClientProvider client={client}>
+        <BackendStatus />
+      </QueryClientProvider>
+    </AppContext.Provider>,
   );
   return { ...result, client };
 }
@@ -30,11 +50,11 @@ describe('backend status', () => {
     const { client } = renderStatus();
 
     expect(screen.getByRole('status')).toHaveTextContent(
-      'Проверяем состояние API',
+      'Checking the API status',
     );
     expect(screen.getByRole('button')).toBeDisabled();
     respond(new Response('{"status":"ok"}'));
-    expect(await screen.findByText('API доступен')).toBeInTheDocument();
+    expect(await screen.findByText('API is available')).toBeInTheDocument();
     expect(screen.getByRole('button')).toBeEnabled();
     client.clear();
   });
@@ -45,16 +65,16 @@ describe('backend status', () => {
     const { client } = renderStatus();
 
     expect(
-      await screen.findByText('Нет соединения с API.'),
+      await screen.findByText('No connection to the API.'),
     ).toBeInTheDocument();
     expect(fetch).toHaveBeenCalledTimes(2);
     expect(client.isFetching()).toBe(0);
 
     fetch.mockResolvedValue(new Response('{"status":"ok"}'));
     await userEvent.click(
-      screen.getByRole('button', { name: 'Повторить проверку' }),
+      screen.getByRole('button', { name: 'Retry the check' }),
     );
-    expect(await screen.findByText('API доступен')).toBeInTheDocument();
+    expect(await screen.findByText('API is available')).toBeInTheDocument();
     expect(fetch).toHaveBeenCalledTimes(3);
     client.clear();
   });
@@ -67,7 +87,7 @@ describe('backend status', () => {
     const { client } = renderStatus();
 
     expect(
-      await screen.findByText('API вернул некорректный ответ.'),
+      await screen.findByText('The API returned an invalid response.'),
     ).toBeInTheDocument();
     expect(fetch).toHaveBeenCalledTimes(1);
     client.clear();

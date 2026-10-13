@@ -1,5 +1,5 @@
 const API_BASE_URL = '/api';
-const DEFAULT_TIMEOUT_MS = 3_000;
+const DEFAULT_TIMEOUT_MS = 8_000;
 
 export type ApiFields = Record<string, string[]>;
 
@@ -11,6 +11,11 @@ export type RequestOptions = {
   csrfToken?: string;
 };
 
+/**
+ * A failed API call surfaced as a safe `code` plus optional field errors.
+ * `message` is a developer-facing diagnostic for logs and debugging — the
+ * UI renders localized copy from `code` (and `fields`), never `message`.
+ */
 export class ApiError extends Error {
   readonly code: string;
   readonly status: number | undefined;
@@ -138,8 +143,8 @@ export async function request<T>(
       throw new ApiError(
         errorCode(payload),
         response.status >= 500
-          ? 'Сервис временно недоступен.'
-          : 'Не удалось выполнить запрос к API.',
+          ? 'The service is temporarily unavailable.'
+          : 'The API request failed.',
         {
           status: response.status,
           retryable: response.status >= 500 || response.status === 429,
@@ -149,7 +154,10 @@ export async function request<T>(
     }
 
     if (payload === null) {
-      throw new ApiError('invalid_response', 'API вернул некорректный ответ.');
+      throw new ApiError(
+        'invalid_response',
+        'The API returned an invalid response.',
+      );
     }
 
     return payload as T;
@@ -159,16 +167,16 @@ export async function request<T>(
     }
 
     if (signal?.aborted) {
-      throw new ApiError('request_cancelled', 'Запрос отменён.');
+      throw new ApiError('request_cancelled', 'The request was cancelled.');
     }
 
     if (timeoutController.signal.aborted) {
-      throw new ApiError('request_timeout', 'Превышено время ожидания API.', {
+      throw new ApiError('request_timeout', 'The API request timed out.', {
         retryable: true,
       });
     }
 
-    throw new ApiError('network_error', 'Нет соединения с API.', {
+    throw new ApiError('network_error', 'Could not reach the API.', {
       retryable: true,
     });
   } finally {
