@@ -124,18 +124,21 @@ export function StoreLayout() {
 
       <header className="sticky top-0 z-40 border-b border-dune/70 bg-cream/85 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3 sm:px-6">
-          <Link to="/" className="flex items-baseline gap-2">
-            <span className="font-display text-xl font-bold tracking-tight">
+          <Link
+            to="/"
+            className="flex min-w-0 items-baseline gap-2 whitespace-nowrap"
+          >
+            <span className="shrink-0 font-display text-xl font-bold tracking-tight">
               Sport E
             </span>
-            <span className="hidden text-xs text-ink-mute sm:inline">
+            <span className="hidden min-w-0 truncate text-xs text-ink-mute sm:inline">
               {t.nav.brand_tagline}
             </span>
           </Link>
 
           <nav
             aria-label="Main"
-            className="ml-auto hidden items-center gap-1 sm:flex"
+            className="ml-auto hidden shrink-0 items-center gap-1 sm:flex"
           >
             <NavLink to="/" end className={navLinkClass}>
               {t.nav.home}
@@ -146,7 +149,7 @@ export function StoreLayout() {
             {authLinks}
           </nav>
 
-          <div className="hidden sm:block">
+          <div className="hidden shrink-0 sm:block">
             <MarketSwitcher />
           </div>
 
