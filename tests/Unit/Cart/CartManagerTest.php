@@ -15,6 +15,7 @@ use App\Domain\Catalog\Repository\ProductVariantRepository;
 use App\Domain\Identity\Entity\User;
 use App\Presentation\Http\ApiProblem;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\Persistence\ManagerRegistry;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bundle\SecurityBundle\Security;
@@ -40,7 +41,13 @@ final class CartManagerTest extends TestCase
             fn (callable $callback): mixed => $callback($this->em),
         );
         $this->security = $this->createMock(Security::class);
-        $this->manager = new CartManager($this->carts, $this->variants, $this->em, $this->security);
+        $this->manager = new CartManager(
+            $this->carts,
+            $this->variants,
+            $this->em,
+            $this->createMock(ManagerRegistry::class),
+            $this->security,
+        );
     }
 
     private static function variant(int $id, int $stock): ProductVariant

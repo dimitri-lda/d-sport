@@ -9,10 +9,13 @@ use App\Application\Identity\RegisterInput;
 use App\Application\Identity\RegistrationService;
 use App\EventSubscriber\ApiCsrfSubscriber;
 use App\Presentation\Http\Api\ContextView;
+use App\Presentation\Http\ApiProblem;
 use App\Presentation\Http\JsonBody;
 use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 
@@ -24,12 +27,19 @@ final class RegisterController
         private readonly ContextView $contextView,
         private readonly CsrfTokenManagerInterface $csrfTokenManager,
         private readonly CartManager $cartManager,
+        #[Autowire(service: 'limiter.registration')]
+        private readonly RateLimiterFactory $registrationLimiter,
     ) {
     }
 
     #[Route('/api/v1/auth/register', name: 'api_v1_auth_register', methods: ['POST'])]
     public function __invoke(Request $request): JsonResponse
     {
+        $limit = $this->registrationLimiter->create($request->getClientIp())->consume();
+        if (!$limit->isAccepted()) {
+            throw new ApiProblem('too_many_requests', 'Too many registration attempts. Please wait.', 429);
+        }
+
         $body = JsonBody::decode($request);
         $input = new RegisterInput(
             JsonBody::string($body, 'display_name') ?? '',

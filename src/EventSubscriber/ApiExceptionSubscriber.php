@@ -6,6 +6,7 @@ namespace App\EventSubscriber;
 
 use App\Domain\DomainException;
 use App\Presentation\Http\ApiProblem;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
@@ -15,6 +16,10 @@ use Symfony\Component\HttpKernel\KernelEvents;
 
 final class ApiExceptionSubscriber implements EventSubscriberInterface
 {
+    public function __construct(private readonly LoggerInterface $logger)
+    {
+    }
+
     /** @return array<string, array{string, int}> */
     public static function getSubscribedEvents(): array
     {
@@ -60,7 +65,13 @@ final class ApiExceptionSubscriber implements EventSubscriberInterface
             };
             if ($exception instanceof DomainException) {
                 $code = 'domain_rule_violated';
-                $message = $exception->getMessage();
+                // Domain messages describe internals ("Malformed exchange
+                // rate ...") — keep them out of the response body.
+                $message = 'The request violates a business rule.';
+                $this->logger->warning('Domain rule violated: {message}', [
+                    'message' => $exception->getMessage(),
+                    'exception' => $exception,
+                ]);
             } else {
                 $message = Response::$statusTexts[$status] ?? 'Request failed';
             }

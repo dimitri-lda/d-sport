@@ -42,8 +42,28 @@ final class PricingServiceTest extends TestCase
         self::assertSame(2, $this->pricing->grossCents(1, self::market('1.00000000', 5000)));
         // Just below half rounds down.
         self::assertSame(1, $this->pricing->grossCents(1, self::market('1.00000000', 4999)));
-        // 2500 * 1.23456789 * 1.20 = 3703.70367 -> 3704
-        self::assertSame(3704, $this->pricing->grossCents(2500, self::market('1.23456789', 2000)));
+        // 2500 * 1.23456789 = 3086.419725 -> net 3086, then 3086 * 1.20 = 3703.2 -> 3703
+        self::assertSame(3703, $this->pricing->grossCents(2500, self::market('1.23456789', 2000)));
+    }
+
+    public function testGrossIsAlwaysConvertThenTax(): void
+    {
+        // The invariant that was once broken: the single-step formula used
+        // to disagree with the cart's convert-then-tax path on whole-cent
+        // boundaries. grossCents must be exactly that composition.
+        foreach ([['4.28000000', 2300], ['0.95120000', 810]] as [$rate, $vat]) {
+            $market = self::market($rate, $vat);
+            for ($net = 100; $net <= 20000; ++$net) {
+                self::assertSame(
+                    $this->pricing->grossFromConvertedNetCents(
+                        $this->pricing->convertedNetCents($net, $market),
+                        $market,
+                    ),
+                    $this->pricing->grossCents($net, $market),
+                    \sprintf('net=%d rate=%s vat=%d', $net, $rate, $vat),
+                );
+            }
+        }
     }
 
     public function testRejectsNegativeAmountsAndMalformedRates(): void

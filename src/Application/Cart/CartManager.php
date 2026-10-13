@@ -11,6 +11,7 @@ use App\Domain\Identity\Entity\User;
 use App\Presentation\Http\ApiProblem;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\Persistence\ManagerRegistry;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Session\SessionInterface;
@@ -32,6 +33,7 @@ final class CartManager
         private readonly CartRepository $carts,
         private readonly ProductVariantRepository $variants,
         private readonly EntityManagerInterface $entityManager,
+        private readonly ManagerRegistry $registry,
         private readonly Security $security,
     ) {
     }
@@ -163,7 +165,9 @@ final class CartManager
             $this->entityManager->flush();
         } catch (UniqueConstraintViolationException) {
             // A concurrent request won the create race; reload the winner.
-            $this->entityManager->clear();
+            // The failed flush closed the manager — reset it (as PlaceOrder
+            // does on its retry path) or the next flush() would throw.
+            $this->registry->resetManager();
             $cart = null !== $user
                 ? $this->carts->findForUser($user)
                 : (null !== $token ? $this->carts->findForGuestToken($token) : null);

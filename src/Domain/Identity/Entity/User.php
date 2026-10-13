@@ -9,13 +9,14 @@ use App\Domain\Identity\Repository\UserRepository;
 use App\Domain\Identity\UserRole;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Security\Core\User\EquatableInterface;
 use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 
 #[ORM\Entity(repositoryClass: UserRepository::class)]
 #[ORM\Table(name: 'users')]
 #[ORM\UniqueConstraint(name: 'users_remember_token_unique', columns: ['remember_token'])]
-class User implements UserInterface, PasswordAuthenticatedUserInterface
+class User implements UserInterface, PasswordAuthenticatedUserInterface, EquatableInterface
 {
     #[ORM\Id]
     #[ORM\GeneratedValue(strategy: 'IDENTITY')]
@@ -107,6 +108,27 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     {
     }
 
+    /**
+     * Session-refresh comparison used by the context listener: once this
+     * returns false — identifier, role or password hash changed — the
+     * stored security token is discarded, so a password change kills every
+     * other session for the account.
+     */
+    public function isEqualTo(UserInterface $user): bool
+    {
+        if ($this->getUserIdentifier() !== $user->getUserIdentifier()) {
+            return false;
+        }
+        if ($this->getRoles() !== $user->getRoles()) {
+            return false;
+        }
+        if ($user instanceof PasswordAuthenticatedUserInterface && $this->getPassword() !== $user->getPassword()) {
+            return false;
+        }
+
+        return true;
+    }
+
     public function isEmailVerified(): bool
     {
         return null !== $this->emailVerifiedAt;
@@ -142,6 +164,8 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function changePassword(string $hash): void
     {
         $this->passwordHash = $hash;
+        // Outstanding remember-me material must die with the old password.
+        $this->rememberToken = null;
         $this->updatedAt = $this->now();
     }
 

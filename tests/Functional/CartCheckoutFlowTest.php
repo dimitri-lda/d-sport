@@ -13,6 +13,7 @@ use App\Domain\Ordering\DeliveryMethod;
 use App\Domain\Ordering\Entity\Order;
 use App\Tests\Double\QueueOrderNumberSource;
 use App\Tests\Double\RecordingCatalogCacheInvalidator;
+use App\Tests\Support\FlushesRedis;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\ORM\EntityManagerInterface;
@@ -26,6 +27,8 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
  */
 final class CartCheckoutFlowTest extends WebTestCase
 {
+    use FlushesRedis;
+
     private const PASSWORD = 'Sport-E!2026';
 
     protected function setUp(): void
@@ -33,6 +36,9 @@ final class CartCheckoutFlowTest extends WebTestCase
         if ('1' !== getenv('RUN_INFRASTRUCTURE_TESTS')) {
             self::markTestSkipped('Use make test to run against isolated PostgreSQL and Redis.');
         }
+        // All tests share the 127.0.0.1 client IP and the Redis-backed
+        // limiter storage — flush it so windows stay per-test.
+        self::flushRedis();
     }
 
     private static function csrf(KernelBrowser $client): string
@@ -753,11 +759,24 @@ final class CartCheckoutFlowTest extends WebTestCase
             self::markTestSkipped('pcntl/posix unavailable; sequential oversell covered by rollback test.');
         }
 
-        // Client A (parent) holds a cart for all remaining stock.
+        // Both carts are filled BEFORE the row lock is taken: a cart insert
+        // takes a FOR KEY SHARE on the variant row, so it would block on the
+        // lock below and the child could never reach its checkout first.
+        // Two clients mean two cookie jars and therefore two independent
+        // guest carts, each holding all 3 units.
         $clientA = self::createClient();
         $variantId = self::variant(3);
         $ordersBefore = (int) self::connection()->fetchOne('SELECT count(*) FROM orders');
         self::addToCart($clientA, $variantId, 3);
+
+        $clientB = self::secondClient();
+        self::jsonRequest($clientB, 'POST', '/api/v1/cart/items', [
+            'variant_id' => $variantId,
+            'quantity' => 3,
+        ], self::csrf($clientB));
+        // Status helpers only see test.client — assert clientB directly.
+        self::assertSame(201, $clientB->getResponse()->getStatusCode());
+        $sessionCookies = $clientB->getCookieJar()->all();
 
         // An independent connection takes the variant row lock first.
         $params = self::connection()->getParams();
@@ -768,27 +787,32 @@ final class CartCheckoutFlowTest extends WebTestCase
             ['id' => $variantId],
         );
         self::assertSame(3, (int) $lockedStock);
+        // FOR UPDATE stamps the row's xmax with this xid; a second
+        // FOR UPDATE then waits on it as an ungranted transactionid lock.
+        $holderXid = (int) $lock->fetchOne('SELECT txid_current()');
 
-        $resultFile = (string) tempnam(sys_get_temp_dir(), 'order-race-');
+        $dir = sys_get_temp_dir().'/order-race-'.bin2hex(random_bytes(4));
+        mkdir($dir);
+        $resultFile = $dir.'/result';
         $pid = pcntl_fork();
         if (-1 === $pid || false === $pid) {
             self::fail('pcntl_fork failed.');
         }
         if (0 === $pid) {
-            // Child: a genuinely separate kernel, session and DB connection.
+            // Child: a genuinely separate kernel and DB connection sharing
+            // clientB's guest session — the cookies cross the fork as plain
+            // value objects. The cart is already filled; the child does
+            // nothing but the checkout that must contend on the row lock.
             try {
                 self::ensureKernelShutdown();
-                $clientB = self::createClient();
-                self::jsonRequest($clientB, 'POST', '/api/v1/cart/items', [
-                    'variant_id' => $variantId,
-                    'quantity' => 3,
-                ], self::csrf($clientB));
-                $code = $clientB->getResponse()->getStatusCode();
-                if (201 === $code) {
-                    self::jsonRequest($clientB, 'POST', '/api/v1/orders', self::orderBody(), self::csrf($clientB));
-                    $code = $clientB->getResponse()->getStatusCode();
+                $client = self::createClient();
+                foreach ($sessionCookies as $cookie) {
+                    $client->getCookieJar()->set($cookie);
                 }
-                file_put_contents($resultFile, (string) $code);
+                $csrf = self::csrf($client);
+                file_put_contents($dir.'/attempting', '1');
+                self::jsonRequest($client, 'POST', '/api/v1/orders', self::orderBody(), $csrf);
+                file_put_contents($resultFile, (string) $client->getResponse()->getStatusCode());
             } catch (\Throwable $exception) {
                 file_put_contents($resultFile, 'error:'.$exception->getMessage());
             }
@@ -798,27 +822,58 @@ final class CartCheckoutFlowTest extends WebTestCase
             exit(1);
         }
 
-        // Let the child reach the FOR UPDATE on the locked row, then release.
-        usleep(700_000);
-        $lock->commit();
+        try {
+            // Release only once the child is genuinely blocked on the row
+            // lock — pg_locks shows its FOR UPDATE wait as an ungranted
+            // transactionid lock on the holder's xid, no timing assumption.
+            // The whole hold stays far below the 2s statement_timeout from
+            // tests/bootstrap.php.
+            self::assertTrue(
+                self::waitForFile($dir.'/attempting'),
+                'The child never reached its checkout request.',
+            );
+            $deadline = microtime(true) + 1.5;
+            $blocked = false;
+            while (microtime(true) < $deadline && !$blocked) {
+                $blocked = (bool) $lock->fetchOne(
+                    "SELECT EXISTS (
+                        SELECT 1 FROM pg_locks
+                        WHERE locktype = 'transactionid'
+                          AND transactionid = :xid
+                          AND NOT granted
+                    )",
+                    ['xid' => $holderXid],
+                );
+                if (!$blocked) {
+                    usleep(20_000);
+                }
+            }
+            self::assertTrue($blocked, 'The child never waited on the variant row lock.');
+            $lock->commit();
 
-        // The child unblocked, won the stock and committed. Parent now loses.
-        self::jsonRequest($clientA, 'POST', '/api/v1/orders', self::orderBody(), self::csrf($clientA));
-        $parentCode = $clientA->getResponse()->getStatusCode();
+            // The child unblocked, won the stock and committed. The parent's
+            // checkout now loses the race.
+            self::jsonRequest($clientA, 'POST', '/api/v1/orders', self::orderBody(), self::csrf($clientA));
+            $parentCode = $clientA->getResponse()->getStatusCode();
 
-        pcntl_waitpid($pid, $status);
-        $childResult = trim((string) file_get_contents($resultFile));
-        unlink($resultFile);
-        $lock->close();
+            pcntl_waitpid($pid, $status);
+            $childResult = trim((string) file_get_contents($resultFile));
 
-        self::assertSame('201', $childResult, 'The lock holder released; the child checkout must succeed.');
-        self::assertSame(422, $parentCode, 'The losing checkout must fail validation.');
-        self::assertSame('insufficient_stock', self::payload($clientA)['error']['code']);
-        self::assertSame(0, (int) self::connection()->fetchOne(
-            'SELECT stock FROM product_variants WHERE id = :id',
-            ['id' => $variantId],
-        ), 'Stock must never go negative.');
-        self::assertSame($ordersBefore + 1, (int) self::connection()->fetchOne('SELECT count(*) FROM orders'));
+            self::assertSame('201', $childResult, 'The lock holder released; the child checkout must succeed.');
+            self::assertSame(422, $parentCode, 'The losing checkout must fail validation.');
+            self::assertSame('insufficient_stock', self::payload($clientA)['error']['code']);
+            self::assertSame(0, (int) self::connection()->fetchOne(
+                'SELECT stock FROM product_variants WHERE id = :id',
+                ['id' => $variantId],
+            ), 'Stock must never go negative.');
+            self::assertSame($ordersBefore + 1, (int) self::connection()->fetchOne('SELECT count(*) FROM orders'));
+        } finally {
+            $lock->close(); // releases the row lock so the child can exit
+            pcntl_waitpid($pid, $status); // no-op once already reaped
+            @unlink($dir.'/attempting');
+            @unlink($resultFile);
+            @rmdir($dir);
+        }
     }
 
     public function testRegistrationEnqueuesVerificationMail(): void

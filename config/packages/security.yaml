@@ -22,12 +22,6 @@ security:
                 interval: '1 minute'
             logout:
                 path: /api/v1/auth/logout
-            remember_me:
-                secret: '%kernel.secret%'
-                lifetime: 2592000
-                path: /
-                secure: auto
-                samesite: lax
         main:
             lazy: true
             provider: app_users

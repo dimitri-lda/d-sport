@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace App\Presentation\Http\Api\V1;
 
 use App\Application\Identity\AddressInput;
+use App\Application\Identity\PasswordConfirmationService;
 use App\Application\Identity\ProfileService;
 use App\Domain\Identity\Entity\SavedAddress;
 use App\Domain\Identity\Entity\User;
 use App\Domain\Identity\Repository\SavedAddressRepository;
 use App\Presentation\Http\Api\ContextView;
+use App\Presentation\Http\ApiProblem;
 use App\Presentation\Http\JsonBody;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -27,6 +29,7 @@ final class ProfileController
         private readonly SavedAddressRepository $addresses,
         private readonly ContextView $contextView,
         private readonly TokenStorageInterface $tokenStorage,
+        private readonly PasswordConfirmationService $confirmations,
     ) {
     }
 
@@ -45,10 +48,20 @@ final class ProfileController
     public function update(Request $request, #[CurrentUser] User $user): JsonResponse
     {
         $body = JsonBody::decode($request);
+        $email = JsonBody::string($body, 'email') ?? '';
+        // An email change is re-authenticated — it is the one profile edit
+        // that can chain into a full account takeover. A display-name-only
+        // edit needs no confirmation.
+        if (
+            mb_strtolower(trim($email)) !== mb_strtolower($user->getEmail())
+            && !$this->confirmations->isConfirmed($request->getSession(), self::now())
+        ) {
+            throw new ApiProblem('password_confirmation_required', 'A recent password confirmation is required to change the email address.', 403);
+        }
         $this->profile->updateProfile(
             $user,
             JsonBody::string($body, 'display_name') ?? '',
-            JsonBody::string($body, 'email') ?? '',
+            $email,
             self::now(),
         );
 

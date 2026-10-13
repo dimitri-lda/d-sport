@@ -126,6 +126,11 @@ final class PlaceOrder
             ];
         }
 
+        // Lock in ascending variant-id order, exactly as
+        // InventoryRelease::releaseLocked() does: two checkouts locking
+        // overlapping variants in different sequences can deadlock.
+        usort($lines, static fn (array $a, array $b): int => $a['variant_id'] <=> $b['variant_id']);
+
         /** @var list<array{variant: ProductVariant, quantity: int, net_cents: int}> $locked */
         $locked = [];
         foreach ($lines as $line) {

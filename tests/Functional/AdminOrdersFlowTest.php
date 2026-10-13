@@ -13,6 +13,7 @@ use App\Domain\Ordering\Entity\Order;
 use App\Domain\Ordering\Entity\OrderAddress;
 use App\Domain\Ordering\OrderStatus;
 use App\Tests\Double\RecordingCatalogCacheInvalidator;
+use App\Tests\Support\FlushesRedis;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
@@ -26,6 +27,8 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  */
 final class AdminOrdersFlowTest extends WebTestCase
 {
+    use FlushesRedis;
+
     private const PASSWORD = 'Sport-E!2026';
 
     protected function setUp(): void
@@ -33,6 +36,9 @@ final class AdminOrdersFlowTest extends WebTestCase
         if ('1' !== getenv('RUN_INFRASTRUCTURE_TESTS')) {
             self::markTestSkipped('Use make test to run against isolated PostgreSQL and Redis.');
         }
+        // All tests share the 127.0.0.1 client IP and the Redis-backed
+        // limiter storage — flush it so windows stay per-test.
+        self::flushRedis();
     }
 
     private static function csrf(KernelBrowser $client): string

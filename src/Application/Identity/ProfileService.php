@@ -72,11 +72,24 @@ final class ProfileService
 
     public function updateAddress(User $user, AddressInput $input): SavedAddress
     {
+        // Normalize once, up front — validate and persist the trimmed values,
+        // mirroring PlaceOrder::validate(), rather than validating trimmed
+        // copies while storing the raw ones.
+        $input = new AddressInput(
+            trim($input->firstName),
+            trim($input->lastName),
+            trim($input->line1),
+            null === $input->line2 ? null : trim($input->line2),
+            trim($input->city),
+            trim($input->postalCode),
+            strtoupper(trim($input->country)),
+        );
+
         $fields = self::addressFields($input);
         if ([] !== $fields) {
             throw new ApiProblem('validation_failed', 'The given address is invalid.', 422, $fields);
         }
-        $country = strtoupper(trim($input->country));
+        $country = $input->country;
         if (!$this->countries->isSupported($country)) {
             throw new ApiProblem('validation_failed', 'The given address is invalid.', 422, ['country' => ['The selected country is not supported.']]);
         }
@@ -149,25 +162,25 @@ final class ProfileService
     private static function addressFields(AddressInput $input): array
     {
         $fields = [];
-        if ('' === trim($input->firstName) || mb_strlen($input->firstName) > 80) {
+        if ('' === $input->firstName || mb_strlen($input->firstName) > 80) {
             $fields['first_name'] = ['The first name is required (1-80 characters).'];
         }
-        if ('' === trim($input->lastName) || mb_strlen($input->lastName) > 80) {
+        if ('' === $input->lastName || mb_strlen($input->lastName) > 80) {
             $fields['last_name'] = ['The last name is required (1-80 characters).'];
         }
-        if ('' === trim($input->line1) || mb_strlen($input->line1) > 180) {
+        if ('' === $input->line1 || mb_strlen($input->line1) > 180) {
             $fields['line1'] = ['The address line is required (1-180 characters).'];
         }
         if (null !== $input->line2 && mb_strlen($input->line2) > 180) {
             $fields['line2'] = ['The second address line must be at most 180 characters.'];
         }
-        if ('' === trim($input->city) || mb_strlen($input->city) > 80) {
+        if ('' === $input->city || mb_strlen($input->city) > 80) {
             $fields['city'] = ['The city is required (1-80 characters).'];
         }
-        if ('' === trim($input->postalCode) || mb_strlen($input->postalCode) > 20) {
+        if ('' === $input->postalCode || mb_strlen($input->postalCode) > 20) {
             $fields['postal_code'] = ['The postal code is required (1-20 characters).'];
         }
-        if (1 !== preg_match('/^[A-Za-z]{2}$/', $input->country)) {
+        if (1 !== preg_match('/^[A-Z]{2}$/', $input->country)) {
             $fields['country'] = ['The country must be a two-letter ISO code.'];
         }
 

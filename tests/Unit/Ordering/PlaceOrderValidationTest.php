@@ -61,6 +61,7 @@ final class PlaceOrderValidationTest extends TestCase
                 $this->createMock(CartRepository::class),
                 $this->createMock(ProductVariantRepository::class),
                 $em,
+                $this->createMock(ManagerRegistry::class),
                 $security,
             ),
             new MarketContextResolver($countries, $this->createMock(CountryLookup::class), $rates),
