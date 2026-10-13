@@ -1,0 +1,66 @@
+parameters:
+    env(STOREFRONT_CACHE_ENABLED): '1'
+    env(STOREFRONT_CACHE_PREFIX): 'sport_e'
+    env(STOREFRONT_CACHE_GENERATION_TTL): '2592000'
+    env(STOREFRONT_CACHE_TREE_FRESH_TTL): '3600'
+    env(STOREFRONT_CACHE_TREE_TOTAL_TTL): '86400'
+    env(STOREFRONT_CACHE_LIST_FRESH_TTL): '300'
+    env(STOREFRONT_CACHE_LIST_TOTAL_TTL): '1800'
+    env(STOREFRONT_CACHE_CARD_FRESH_TTL): '900'
+    env(STOREFRONT_CACHE_CARD_TOTAL_TTL): '3600'
+    env(EXCHANGE_RATE_CACHE_TTL): '300'
+    # flock covers a single host. Multi-replica production needs a shared
+    # store here instead, e.g. LOCK_DSN=redis://redis:6379 — otherwise every
+    # replica fills the same key on a stampede.
+    env(LOCK_DSN): 'flock'
+
+    storefront_cache.enabled: '%env(bool:STOREFRONT_CACHE_ENABLED)%'
+    storefront_cache.prefix: '%env(STOREFRONT_CACHE_PREFIX)%'
+    storefront_cache.generation_ttl: '%env(int:STOREFRONT_CACHE_GENERATION_TTL)%'
+    storefront_cache.exchange_rate_ttl: '%env(int:EXCHANGE_RATE_CACHE_TTL)%'
+    storefront_cache.ttl:
+        tree:
+            fresh: '%env(int:STOREFRONT_CACHE_TREE_FRESH_TTL)%'
+            total: '%env(int:STOREFRONT_CACHE_TREE_TOTAL_TTL)%'
+        list:
+            fresh: '%env(int:STOREFRONT_CACHE_LIST_FRESH_TTL)%'
+            total: '%env(int:STOREFRONT_CACHE_LIST_TOTAL_TTL)%'
+        card:
+            fresh: '%env(int:STOREFRONT_CACHE_CARD_FRESH_TTL)%'
+            total: '%env(int:STOREFRONT_CACHE_CARD_TOTAL_TTL)%'
+
+framework:
+    # Stampede protection for storefront cache misses (see LOCK_DSN above).
+    lock: '%env(LOCK_DSN)%'
+    cache:
+        pools:
+            # One pool per storefront generation group plus a short-lived
+            # pool for exchange rates; all backed by the shared Redis.
+            cache.storefront.tree:
+                adapter: cache.adapter.redis
+                default_lifetime: '%env(int:STOREFRONT_CACHE_TREE_TOTAL_TTL)%'
+            cache.storefront.list:
+                adapter: cache.adapter.redis
+                default_lifetime: '%env(int:STOREFRONT_CACHE_LIST_TOTAL_TTL)%'
+            cache.storefront.card:
+                adapter: cache.adapter.redis
+                default_lifetime: '%env(int:STOREFRONT_CACHE_CARD_TOTAL_TTL)%'
+            cache.exchange_rates:
+                adapter: cache.adapter.redis
+                default_lifetime: '%env(int:EXCHANGE_RATE_CACHE_TTL)%'
+
+when@test:
+    framework:
+        cache:
+            pools:
+                # In-memory pools in tests: identical code path, but no
+                # Redis dependency and no cross-request staleness between
+                # kernel reboots.
+                cache.storefront.tree:
+                    adapter: cache.adapter.array
+                cache.storefront.list:
+                    adapter: cache.adapter.array
+                cache.storefront.card:
+                    adapter: cache.adapter.array
+                cache.exchange_rates:
+                    adapter: cache.adapter.array

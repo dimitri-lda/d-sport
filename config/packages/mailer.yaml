@@ -1,0 +1,9 @@
+parameters:
+    env(MAILER_DSN): 'null://null'
+    env(MAILER_FROM): 'Sport E <no-reply@sport-e.example>'
+    env(APP_PUBLIC_URL): 'http://localhost:5173'
+
+framework:
+    mailer:
+        dsn: '%env(MAILER_DSN)%'
+        message_bus: 'messenger.default_bus'

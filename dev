@@ -35,6 +35,7 @@ case "$command" in
         compose exec -T frontend npm run build
         docker build --target prod -t sport-e-app:production .
         ;;
+    e2e) bash scripts/e2e.sh ;;
     migrate) compose run --rm migrate ;;
     console) compose exec backend php bin/console "$@" ;;
     shell) compose exec backend sh ;;
@@ -48,7 +49,7 @@ case "$command" in
     prod-down) prod down ;;
     help)
         echo 'Usage: ./dev <command> [arguments]'
-        echo 'init up down logs test lint format build migrate console shell'
+        echo 'init up down logs test e2e lint format build migrate console shell'
         echo 'worker-logs worker-start worker-stop failed-show failed-retry'
         echo 'prod-build prod-up prod-down (PROD_ENV defaults to .env.prod.local)'
         ;;

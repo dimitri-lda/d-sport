@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ApiError, getJson } from './client';
+import { ApiError, getJson, request } from './client';
 import { getLiveness } from './health';
 
 describe('API client', () => {
@@ -142,5 +142,107 @@ describe('API client', () => {
     await expect(
       getJson('/health/live', { signal: controller.signal }),
     ).rejects.toMatchObject({ code: 'request_cancelled', retryable: false });
+  });
+});
+
+describe('API client mutations', () => {
+  it('sends JSON body and CSRF token on mutating requests', async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: { ok: true } }), {
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetch);
+
+    await request('/v1/preferences', {
+      method: 'PUT',
+      body: { country: 'PL', locale: 'pl' },
+      csrfToken: 'csrf-123',
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/v1/preferences',
+      expect.objectContaining({
+        method: 'PUT',
+        credentials: 'same-origin',
+        body: JSON.stringify({ country: 'PL', locale: 'pl' }),
+      }),
+    );
+    const [, init] = fetch.mock.calls[0] as [string, RequestInit];
+    expect(init.headers).toMatchObject({
+      'Content-Type': 'application/json',
+      'X-CSRF-Token': 'csrf-123',
+    });
+  });
+
+  it('does not attach CSRF headers to GET requests', async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: {} }), {
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetch);
+
+    await request('/v1/context', { csrfToken: 'csrf-123' });
+    const [, init] = fetch.mock.calls[0] as [string, RequestInit];
+    expect(init.headers).not.toMatchObject({ 'X-CSRF-Token': 'csrf-123' });
+  });
+
+  it('parses a 204 response as undefined', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(null, { status: 204 })),
+    );
+
+    await expect(
+      request<undefined>('/v1/cart/items/1', {
+        method: 'DELETE',
+        csrfToken: 'x',
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('maps validation error fields into ApiError.fields', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            error: {
+              code: 'validation_failed',
+              message: 'Invalid.',
+              fields: { country: ['The selected country is not supported.'] },
+            },
+          }),
+          { status: 422 },
+        ),
+      ),
+    );
+
+    await expect(
+      request('/v1/preferences', { method: 'PUT', body: {} }),
+    ).rejects.toMatchObject({
+      code: 'validation_failed',
+      status: 422,
+      fields: { country: ['The selected country is not supported.'] },
+    });
+  });
+
+  it('ignores malformed field payloads', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            error: { code: 'validation_failed', fields: ['nope'] },
+          }),
+          { status: 422 },
+        ),
+      ),
+    );
+
+    await expect(
+      request('/v1/preferences', { method: 'PUT', body: {} }),
+    ).rejects.toMatchObject({ code: 'validation_failed', fields: undefined });
   });
 });

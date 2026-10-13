@@ -3,3 +3,19 @@ controllers:
         path: ../src/Controller/
         namespace: App\Controller
     type: attribute
+
+api_v1:
+    resource:
+        path: ../src/Presentation/Http/Api/V1/
+        namespace: App\Presentation\Http\Api\V1
+    type: attribute
+
+# The json_login check path needs a matching route now that CheckPathListener
+# is gone; the authenticator answers before any controller would run.
+api_v1_auth_login:
+    path: /api/v1/auth/login
+    methods: [POST]
+
+security_logout:
+    resource: security.route_loader.logout
+    type: service

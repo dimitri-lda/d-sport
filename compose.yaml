@@ -20,6 +20,32 @@ x-app: &app
     REDIS_CONNECT_TIMEOUT: ${REDIS_CONNECT_TIMEOUT:-1}
     REDIS_READ_TIMEOUT: ${REDIS_READ_TIMEOUT:-1}
     MESSENGER_TRANSPORT_DSN: ${MESSENGER_TRANSPORT_DSN:-doctrine://default?auto_setup=false}
+    APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost}
+    MAILER_DSN: ${MAILER_DSN:-null://null}
+    MAILER_FROM: ${MAILER_FROM:-Sport E <no-reply@sport-e.example>}
+    # Retained payment foundation: blank is fine while payments are deferred,
+    # but production must set a generated base64 32-byte key before enabling
+    # payment fixtures/services.
+    APP_FIELD_CIPHER_KEY: ${APP_FIELD_CIPHER_KEY:-}
+    COMMERCE_DEFAULT_COUNTRY: ${COMMERCE_DEFAULT_COUNTRY:-DE}
+    GEOIP_URL: ${GEOIP_URL:-https://ipwho.is/{ip}}
+    MYFIN_EUR_BYN_URL: ${MYFIN_EUR_BYN_URL:-https://myfin.by/converter/eur-byn}
+    WALUTOMAT_EUR_PLN_URL: ${WALUTOMAT_EUR_PLN_URL:-}
+    WALUTOMAT_API_TOKEN: ${WALUTOMAT_API_TOKEN:-}
+    DELIVERY_STANDARD_NET_CENTS: ${DELIVERY_STANDARD_NET_CENTS:-590}
+    DELIVERY_EXPRESS_NET_CENTS: ${DELIVERY_EXPRESS_NET_CENTS:-1290}
+    DELIVERY_FREE_SHIPPING_GROSS_EUR_CENTS: ${DELIVERY_FREE_SHIPPING_GROSS_EUR_CENTS:-5000}
+    STOREFRONT_CACHE_ENABLED: ${STOREFRONT_CACHE_ENABLED:-1}
+    STOREFRONT_CACHE_PREFIX: ${STOREFRONT_CACHE_PREFIX:-sport_e}
+    STOREFRONT_CACHE_GENERATION_TTL: ${STOREFRONT_CACHE_GENERATION_TTL:-2592000}
+    STOREFRONT_CACHE_TREE_FRESH_TTL: ${STOREFRONT_CACHE_TREE_FRESH_TTL:-3600}
+    STOREFRONT_CACHE_TREE_TOTAL_TTL: ${STOREFRONT_CACHE_TREE_TOTAL_TTL:-86400}
+    STOREFRONT_CACHE_LIST_FRESH_TTL: ${STOREFRONT_CACHE_LIST_FRESH_TTL:-300}
+    STOREFRONT_CACHE_LIST_TOTAL_TTL: ${STOREFRONT_CACHE_LIST_TOTAL_TTL:-1800}
+    STOREFRONT_CACHE_CARD_FRESH_TTL: ${STOREFRONT_CACHE_CARD_FRESH_TTL:-900}
+    STOREFRONT_CACHE_CARD_TOTAL_TTL: ${STOREFRONT_CACHE_CARD_TOTAL_TTL:-3600}
+    EXCHANGE_RATE_CACHE_TTL: ${EXCHANGE_RATE_CACHE_TTL:-300}
+    LOCK_DSN: ${LOCK_DSN:-flock}
     TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
     TRUSTED_HOSTS: ${TRUSTED_HOSTS:-^localhost$}
     PHP_MEMORY_LIMIT: ${PHP_MEMORY_LIMIT:-128M}
@@ -66,7 +92,12 @@ services:
     environment:
       <<: *app-env
       PHP_MEMORY_LIMIT: ${WORKER_PHP_MEMORY_LIMIT:-256M}
-    command: ["php", "bin/console", "messenger:consume", "async", "--time-limit=${MESSENGER_TIME_LIMIT:-3600}", "--memory-limit=${MESSENGER_MEMORY_LIMIT:-128M}", "--sleep=1000000", "--no-interaction"]
+    command: [
+      "php", "bin/console", "messenger:consume", "scheduler_default", "async",
+      "--time-limit=${MESSENGER_TIME_LIMIT:-3600}",
+      "--memory-limit=${MESSENGER_MEMORY_LIMIT:-128M}",
+      "--sleep=1000000", "--no-interaction",
+    ]
     stop_grace_period: 60s
     mem_limit: ${WORKER_MEMORY_LIMIT:-384M}
     depends_on:

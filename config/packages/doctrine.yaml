@@ -1,9 +1,47 @@
 doctrine:
     dbal:
-        url: '%env(resolve:DATABASE_URL)%'
-        profiling_collect_backtrace: false
+        default_connection: default
+        connections:
+            default:
+                url: '%env(resolve:DATABASE_URL)%'
+                profiling_collect_backtrace: false
+                # DBAL-owned tables (sessions, rates, webhook ledger, messenger)
+                # are managed by migrations and raw SQL, never the ORM schema tool.
+                schema_filter: ~^(?!(app_sessions|exchange_rates|shopify_webhook_deliveries|messenger_messages))~
+            # Dedicated PDO for PdoSessionHandler: its transactional session lock
+            # holds a PDO-level transaction that must not share the ORM connection.
+            session:
+                url: '%env(resolve:DATABASE_URL)%'
+                logging: false
+                profiling: false
     orm:
         auto_mapping: false
+        mappings:
+            Identity:
+                type: attribute
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/Domain/Identity'
+                prefix: 'App\Domain\Identity'
+            Catalog:
+                type: attribute
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/Domain/Catalog'
+                prefix: 'App\Domain\Catalog'
+            Cart:
+                type: attribute
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/Domain/Cart'
+                prefix: 'App\Domain\Cart'
+            Ordering:
+                type: attribute
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/Domain/Ordering'
+                prefix: 'App\Domain\Ordering'
+            Payment:
+                type: attribute
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/Domain/Payment'
+                prefix: 'App\Domain\Payment'
 
 when@test:
     doctrine:

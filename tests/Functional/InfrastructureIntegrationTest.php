@@ -60,11 +60,16 @@ final class InfrastructureIntegrationTest extends WebTestCase
         $database = $container->get('doctrine.dbal.default_connection');
         self::assertInstanceOf(Connection::class, $database);
         $databaseName = (string) $database->fetchOne('SELECT current_database()');
-        self::assertStringContainsString('_test', $databaseName, 'Infrastructure messages must stay in the isolated test database.');
+        self::assertStringContainsString('_test', $databaseName,
+            'Infrastructure messages must stay in the isolated test database.');
 
         foreach (['async', 'failed'] as $queue) {
             $transport = $container->get('messenger.transport.'.$queue);
             self::assertInstanceOf(TransportInterface::class, $transport);
+            // Mail sends now share the async queue — drain leftovers from
+            // earlier tests so this transport check sees exactly its own
+            // message.
+            $database->executeStatement('DELETE FROM messenger_messages WHERE queue_name = ?', [$queue]);
             $message = new \stdClass();
             $message->token = bin2hex(random_bytes(12));
 

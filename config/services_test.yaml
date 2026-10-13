@@ -1,0 +1,18 @@
+services:
+    App\Tests\Double\QueueOrderNumberSource:
+        autoconfigure: false
+
+    App\Application\Ordering\OrderNumberSource:
+        alias: App\Tests\Double\QueueOrderNumberSource
+
+    App\Tests\Double\RecordingCatalogCacheInvalidator:
+        autoconfigure: false
+
+    App\Application\Catalog\CatalogCacheInvalidator:
+        alias: App\Tests\Double\RecordingCatalogCacheInvalidator
+
+    App\Tests\Double\FakeExchangeRateFetcher:
+        autoconfigure: false
+
+    App\Application\Commerce\ExchangeRateFetcher:
+        alias: App\Tests\Double\FakeExchangeRateFetcher

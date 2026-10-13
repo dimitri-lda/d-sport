@@ -1,58 +1,96 @@
-import { Link, Outlet, Route, Routes } from 'react-router';
-import { BackendStatus } from './components/BackendStatus';
-
-function Layout() {
-  return (
-    <div className="mx-auto max-w-3xl px-6 py-10">
-      <header className="mb-10 border-b border-slate-200 pb-5">
-        <Link to="/" className="text-lg font-semibold">
-          Sport E
-        </Link>
-        <p className="mt-1 text-sm text-slate-500">
-          Технический каркас проекта
-        </p>
-      </header>
-      <main>
-        <Outlet />
-      </main>
-    </div>
-  );
-}
-
-function HomePage() {
-  return (
-    <>
-      <h1 className="text-3xl font-semibold tracking-tight">
-        Основа приложения
-      </h1>
-      <p className="mt-4 mb-8 leading-relaxed text-slate-600">
-        Первый этап: инфраструктура Symfony API и React SPA. Бизнес-логика и
-        перенос legacy будут рассмотрены на следующем этапе.
-      </p>
-      <BackendStatus />
-    </>
-  );
-}
-
-function NotFoundPage() {
-  return (
-    <>
-      <h1 className="text-3xl font-semibold">404 — страница не найдена</h1>
-      <p className="mt-4 text-slate-600">Указанный адрес не существует.</p>
-      <Link to="/" className="mt-6 inline-block underline underline-offset-4">
-        На главную
-      </Link>
-    </>
-  );
-}
+import { Route, Routes } from 'react-router';
+import { AppProvider } from './app/AppContext';
+import { StoreLayout } from './components/StoreLayout';
+import { RequireAuth } from './components/guards/RequireAuth';
+import { RequireGuest } from './components/guards/RequireGuest';
+import { HomePage } from './pages/HomePage';
+import { CatalogPage } from './pages/CatalogPage';
+import { ProductPage } from './pages/ProductPage';
+import { LoginPage } from './pages/LoginPage';
+import { RegisterPage } from './pages/RegisterPage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
+import { VerifyEmailPage } from './pages/VerifyEmailPage';
+import { ConfirmPasswordPage } from './pages/ConfirmPasswordPage';
+import { ProfilePage } from './pages/ProfilePage';
+import { CartPage } from './pages/CartPage';
+import { CheckoutPage } from './pages/CheckoutPage';
+import { OrderPage } from './pages/OrderPage';
+import { OrdersPage } from './pages/OrdersPage';
+import { RequireVerified } from './components/guards/RequireVerified';
+import { RequireAdmin } from './components/guards/RequireAdmin';
+import { AdminLayout } from './components/AdminLayout';
+import { AdminOrdersPage } from './pages/admin/AdminOrdersPage';
+import { AdminOrderPage } from './pages/admin/AdminOrderPage';
+import { NotFoundPage } from './pages/NotFoundPage';
 
 export function App() {
   return (
-    <Routes>
-      <Route element={<Layout />}>
-        <Route index element={<HomePage />} />
-        <Route path="*" element={<NotFoundPage />} />
-      </Route>
-    </Routes>
+    <AppProvider>
+      <Routes>
+        <Route element={<StoreLayout />}>
+          <Route index element={<HomePage />} />
+          <Route path="shop" element={<CatalogPage />} />
+          <Route path="shop/:slug" element={<ProductPage />} />
+          <Route
+            path="login"
+            element={
+              <RequireGuest>
+                <LoginPage />
+              </RequireGuest>
+            }
+          />
+          <Route
+            path="register"
+            element={
+              <RequireGuest>
+                <RegisterPage />
+              </RequireGuest>
+            }
+          />
+          <Route path="forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="reset-password" element={<ResetPasswordPage />} />
+          <Route path="verify-email" element={<VerifyEmailPage />} />
+          <Route
+            path="confirm-password"
+            element={
+              <RequireAuth>
+                <ConfirmPasswordPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="profile"
+            element={
+              <RequireAuth>
+                <ProfilePage />
+              </RequireAuth>
+            }
+          />
+          <Route path="cart" element={<CartPage />} />
+          <Route path="checkout" element={<CheckoutPage />} />
+          <Route path="orders/:number" element={<OrderPage />} />
+          <Route
+            path="account/orders"
+            element={
+              <RequireVerified>
+                <OrdersPage />
+              </RequireVerified>
+            }
+          />
+          <Route path="*" element={<NotFoundPage />} />
+        </Route>
+        <Route
+          element={
+            <RequireAdmin>
+              <AdminLayout />
+            </RequireAdmin>
+          }
+        >
+          <Route path="admin/orders" element={<AdminOrdersPage />} />
+          <Route path="admin/orders/:id" element={<AdminOrderPage />} />
+        </Route>
+      </Routes>
+    </AppProvider>
   );
 }

@@ -9,6 +9,9 @@ parameters:
     env(DB_STATEMENT_TIMEOUT_MS): '2000'
     env(REDIS_CONNECT_TIMEOUT): '1'
     env(REDIS_READ_TIMEOUT): '1'
+    # Empty default keeps lint:container happy; SodiumFieldCipher rejects bad
+    # keys loudly at construction time. Set a base64 32-byte key in .env.
+    env(APP_FIELD_CIPHER_KEY): ''
 
 services:
     _defaults:
@@ -17,6 +20,17 @@ services:
 
     App\:
         resource: '../src/'
+        exclude: '../src/DataFixtures/'
+
+    App\Application\Ordering\OrderNumberSource:
+        alias: App\Application\Ordering\RandomOrderNumberSource
+
+    # LoginSuccessEvent is dispatched on the firewall-scoped dispatcher, not
+    # the main one — the subscriber must be tagged onto it explicitly.
+    App\EventSubscriber\LoginCsrfRefreshSubscriber:
+        autoconfigure: false
+        tags:
+            - { name: kernel.event_subscriber, dispatcher: security.event_dispatcher.api }
 
     app.redis_connection:
         class: Redis
@@ -36,3 +50,124 @@ services:
     App\Health\RedisProbe:
         arguments:
             $redis: '@app.redis_connection'
+
+    app.pdo_session_connection:
+        class: PDO
+        factory: ['@doctrine.dbal.session_connection', 'getNativeConnection']
+
+    App\Infrastructure\Crypto\SodiumFieldCipher:
+        arguments:
+            $key: '%env(base64:APP_FIELD_CIPHER_KEY)%'
+
+    App\Infrastructure\Crypto\FieldCipher:
+        alias: App\Infrastructure\Crypto\SodiumFieldCipher
+
+    App\Application\Identity\AccountMailer:
+        arguments:
+            $fromAddress: '%env(MAILER_FROM)%'
+
+    App\Application\Identity\VerificationLinkSigner:
+        arguments:
+            $appPublicUrl: '%env(APP_PUBLIC_URL)%'
+            $appSecret: '%kernel.secret%'
+
+    App\Application\Identity\PasswordResetService:
+        arguments:
+            $appPublicUrl: '%env(APP_PUBLIC_URL)%'
+
+    App\Application\Commerce\CountryCatalog:
+        arguments:
+            $markets: '%commerce.markets%'
+            $euVatBasisPoints: '%commerce.eu_vat_basis_points%'
+            $countryNames: '%commerce.country_names%'
+            $locales: '%commerce.locales%'
+            $defaultCountry: '%commerce.default_country%'
+            $fallbackMarket: '%commerce.fallback_market%'
+
+    App\Application\Commerce\ExchangeRateStore:
+        alias: App\Infrastructure\Commerce\DbalExchangeRateStore
+
+    App\Application\Commerce\ExchangeRateProvider:
+        alias: App\Infrastructure\Commerce\ExchangeRateService
+
+    App\Application\Commerce\ExchangeRateFetcher:
+        alias: App\Infrastructure\Commerce\HttpExchangeRateFetcher
+
+    App\Infrastructure\Commerce\ExchangeRateService:
+        arguments:
+            $cache: '@cache.exchange_rates'
+            $cacheTtlSeconds: '%storefront_cache.exchange_rate_ttl%'
+
+    App\Infrastructure\Commerce\HttpExchangeRateFetcher:
+        arguments:
+            $myfinEurBynUrl: '%commerce.exchange_rates.myfin_eur_byn_url%'
+            $walutomatEurPlnUrl: '%commerce.exchange_rates.walutomat_eur_pln_url%'
+            $walutomatApiToken: '%commerce.exchange_rates.walutomat_api_token%'
+
+    App\Application\Commerce\CountryLookup:
+        alias: App\Infrastructure\Commerce\GeoIpCountryResolver
+
+    App\Application\Commerce\PricingService:
+        arguments:
+            $standardNetCents: '%commerce.delivery.standard_net_cents%'
+            $expressNetCents: '%commerce.delivery.express_net_cents%'
+            $freeShippingGrossEurCents: '%commerce.delivery.free_shipping_gross_eur_cents%'
+
+    App\Infrastructure\Commerce\GeoIpCountryResolver:
+        arguments:
+            $geoipUrl: '%commerce.geoip_url%'
+
+    App\Application\Catalog\StorefrontCatalog:
+        alias: App\Infrastructure\Catalog\CachedStorefrontCatalog
+
+    App\Infrastructure\Catalog\CachedStorefrontCatalog:
+        arguments:
+            # The source read model is injected explicitly: autowiring the
+            # StorefrontCatalog interface here would resolve to the cached
+            # decorator itself and cycle.
+            $inner: '@App\Infrastructure\Catalog\DbalStorefrontCatalog'
+
+    App\Infrastructure\Cache\StorefrontCache:
+        arguments:
+            $pools:
+                tree: '@cache.storefront.tree'
+                list: '@cache.storefront.list'
+                card: '@cache.storefront.card'
+            $ttl: '%storefront_cache.ttl%'
+            $enabled: '%storefront_cache.enabled%'
+            $prefix: '%storefront_cache.prefix%'
+            $generationTtl: '%storefront_cache.generation_ttl%'
+
+    App\Application\Catalog\StorefrontWarmer:
+        arguments:
+            $locales: '%commerce.locales%'
+
+    App\Infrastructure\Catalog\WarmStorefrontCacheHandler:
+        arguments:
+            $locales: '%commerce.locales%'
+
+    App\Command\StorefrontCacheWarmCommand:
+        arguments:
+            $locales: '%commerce.locales%'
+
+    Symfony\Component\HttpFoundation\Session\Storage\Handler\PdoSessionHandler:
+        arguments:
+            $pdoOrDsn: '@app.pdo_session_connection'
+            $options:
+                db_table: app_sessions
+
+when@dev:
+    services:
+        _defaults:
+            autowire: true
+            autoconfigure: true
+        App\DataFixtures\:
+            resource: '../src/DataFixtures/'
+
+when@test:
+    services:
+        _defaults:
+            autowire: true
+            autoconfigure: true
+        App\DataFixtures\:
+            resource: '../src/DataFixtures/'

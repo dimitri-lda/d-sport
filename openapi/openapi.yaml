@@ -1,0 +1,565 @@
+openapi: 3.1.0
+info:
+  title: Sport E API
+  version: 1.0.0
+  description: >
+    Storefront API for the Symfony migration target. All responses use the
+    `{data: ...}` success envelope (lists may add `meta`) or the
+    `{error: {code, message, fields?}}` problem envelope.
+servers:
+  - url: /api
+paths:
+  /health/live:
+    get:
+      summary: Liveness probe
+      responses:
+        '200': { description: Process is alive }
+  /health/ready:
+    get:
+      summary: Readiness probe (PostgreSQL and Redis reachable)
+      responses:
+        '200': { description: All dependencies healthy }
+        '503': { description: At least one dependency is down }
+  /version:
+    get:
+      summary: Build/version information
+      responses:
+        '200': { description: Version payload }
+  /v1/context:
+    get:
+      summary: Session context (user, market, countries, locales, CSRF token)
+      responses:
+        '200':
+          description: Context payload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        oneOf:
+                          - type: 'null'
+                          - type: object
+                            properties:
+                              id: { type: integer }
+                              email: { type: string }
+                              display_name: { type: string }
+                              role: { type: string, enum: [user, admin, superadmin] }
+                              email_verified: { type: boolean }
+                      market:
+                        type: object
+                        properties:
+                          country: { type: string }
+                          code: { type: string }
+                          currency: { type: string }
+                          locale: { type: string }
+                          vat_basis_points: { type: integer }
+                          exchange_rate: { type: string }
+                      countries:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            code: { type: string }
+                            name: { type: string }
+                      locales:
+                        type: array
+                        items: { type: string }
+                      csrf_token: { type: string }
+  /v1/preferences:
+    put:
+      summary: Persist country/locale market preferences in the session
+      parameters:
+        - name: X-CSRF-Token
+          in: header
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [country, locale]
+              properties:
+                country: { type: string }
+                locale: { type: string, enum: [en, ru, pl] }
+      responses:
+        '200': { description: Updated context payload (same shape as /v1/context) }
+        '419': { description: CSRF token invalid }
+        '422': { description: 'Validation failed; error.fields populated' }
+  /v1/store/home:
+    get:
+      summary: Home payload (top categories and featured products)
+      responses:
+        '200': { description: Categories and featured product cards }
+  /v1/categories:
+    get:
+      summary: Category tree with descendant active-product counts
+      responses:
+        '200': { description: Nested category tree }
+  /v1/products:
+    get:
+      summary: Paginated product listing
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 120 } }
+        - { name: category, in: query, schema: { type: string } }
+        - { name: sort, in: query, schema: { type: string, enum: [newest, price_asc, price_desc] } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200': { description: Product cards with meta pagination }
+        '422': { description: Invalid filters }
+  /v1/products/{slug}:
+    get:
+      summary: Product detail with breadcrumbs and related products
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Product detail }
+        '404': { description: Unknown or inactive product }
+  /v1/auth/register:
+    post:
+      summary: Register a customer account and start a session
+      parameters:
+        - { name: X-CSRF-Token, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [display_name, email, password, password_confirmation, accepted_terms]
+              properties:
+                display_name: { type: string }
+                email: { type: string }
+                password: { type: string }
+                password_confirmation: { type: string }
+                accepted_terms: { type: boolean }
+      responses:
+        '201': { description: Context payload (same shape as /v1/context) }
+        '419': { description: CSRF token invalid }
+        '422': { description: Validation failed or email already taken }
+  /v1/auth/login:
+    post:
+      summary: JSON login handled by the security firewall
+      parameters:
+        - { name: X-CSRF-Token, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string }
+                _remember_me: { type: boolean }
+      responses:
+        '200': { description: Context payload (same shape as /v1/context) }
+        '401': { description: Invalid credentials }
+        '419': { description: CSRF token invalid }
+  /v1/auth/logout:
+    post:
+      summary: Log out and invalidate the session
+      parameters:
+        - { name: X-CSRF-Token, in: header, required: true, schema: { type: string } }
+      responses:
+        '204': { description: Logged out }
+        '419': { description: CSRF token invalid }
+  /v1/auth/forgot-password:
+    post:
+      summary: Request a password reset link (always the same generic answer)
+      parameters:
+        - { name: X-CSRF-Token, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string }
+      responses:
+        '202': { description: Reset link sent when the account exists }
+        '419': { description: CSRF token invalid }
+  /v1/auth/reset-password:
+    post:
+      summary: Reset the password with a mailed token
+      parameters:
+        - { name: X-CSRF-Token, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, token, password, password_confirmation]
+              properties:
+                email: { type: string }
+                token: { type: string }
+                password: { type: string }
+                password_confirmation: { type: string }
+      responses:
+        '204': { description: Password updated }
+        '419': { description: CSRF token invalid }
+        '422': { description: Invalid token or password data }
+  /v1/auth/email/verify/{id}/{hash}:
+    get:
+      summary: Signed email-verification link (state-changing GET, redirects into the SPA)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: hash, in: path, required: true, schema: { type: string } }
+        - { name: expires, in: query, required: true, schema: { type: integer } }
+        - { name: signature, in: query, required: true, schema: { type: string } }
+      responses:
+        '302': { description: Verified; redirects to /verify-email?verified=1 }
+        '401': { description: Authentication required }
+        '403': { description: Invalid or expired link }
+  /v1/auth/email/verification-notification:
+    post:
+      summary: Resend the verification email (6 per minute per user)
+      parameters:
+        - { name: X-CSRF-Token, in: header, required: true, schema: { type: string } }
+      responses:
+        '202': { description: Verification link sent }
+        '401': { description: Authentication required }
+        '419': { description: CSRF token invalid }
+        '429': { description: Resend limit exceeded }
+  /v1/auth/confirm-password:
+    get:
+      summary: Whether the session holds a fresh password confirmation
+      responses:
+        '200': { description: '{data: {confirmed, confirmed_at}}' }
+        '401': { description: Authentication required }
+    post:
+      summary: Confirm the current password (fresh for three hours)
+      parameters:
+        - { name: X-CSRF-Token, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string }
+      responses:
+        '204': { description: Password confirmed }
+        '401': { description: Authentication required }
+        '419': { description: CSRF token invalid }
+        '422': { description: Wrong password }
+  /v1/profile:
+    get:
+      summary: Current user and saved address
+      responses:
+        '200': { description: '{data: {user, address}}' }
+        '401': { description: Authentication required }
+    patch:
+      summary: Update display name and/or email
+      parameters:
+        - { name: X-CSRF-Token, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                display_name: { type: string }
+                email: { type: string }
+      responses:
+        '200': { description: '{data: {user}}; email changes reset verification' }
+        '401': { description: Authentication required }
+        '419': { description: CSRF token invalid }
+        '422': { description: Validation failed or email already taken }
+    delete:
+      summary: Delete the account and invalidate the session
+      parameters:
+        - { name: X-CSRF-Token, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string }
+      responses:
+        '204': { description: Account deleted }
+        '401': { description: Authentication required }
+        '419': { description: CSRF token invalid }
+        '422': { description: Wrong password }
+  /v1/profile/address:
+    put:
+      summary: Create or replace the single saved address
+      parameters:
+        - { name: X-CSRF-Token, in: header, required: true, schema: { type: string } }
+      responses:
+        '200': { description: '{data: {address}}' }
+        '401': { description: Authentication required }
+        '419': { description: CSRF token invalid }
+        '422': { description: Invalid address fields }
+  /v1/profile/password:
+    put:
+      summary: Change the password (requires the current one)
+      parameters:
+        - { name: X-CSRF-Token, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current_password, password, password_confirmation]
+              properties:
+                current_password: { type: string }
+                password: { type: string }
+                password_confirmation: { type: string }
+      responses:
+        '204': { description: Password changed }
+        '401': { description: Authentication required }
+        '419': { description: CSRF token invalid }
+        '422': { description: Wrong current password or weak new password }
+  /v1/cart:
+    get:
+      summary: Current cart (guest or account), creates one when absent
+      responses:
+        '200':
+          description: '{data: Cart}'
+  /v1/cart/items:
+    post:
+      summary: Add a sellable variant to the cart (sum + cap semantics)
+      parameters:
+        - { name: X-CSRF-Token, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [variant_id]
+              properties:
+                variant_id: { type: integer, minimum: 1 }
+                quantity: { type: integer, minimum: 1, maximum: 20, default: 1 }
+      responses:
+        '201':
+          description: '{data: Cart}'
+        '404': { description: product_variant_not_found }
+        '419': { description: CSRF token invalid }
+        '422': { description: Invalid fields or out_of_stock }
+  /v1/cart/items/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    patch:
+      summary: Update a cart line quantity (0 removes)
+      parameters:
+        - { name: X-CSRF-Token, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quantity]
+              properties:
+                quantity: { type: integer, minimum: 0, maximum: 20 }
+      responses:
+        '200':
+          description: '{data: Cart}'
+        '404': { description: cart_item_not_found }
+        '419': { description: CSRF token invalid }
+        '422': { description: Invalid quantity }
+    delete:
+      summary: Remove a cart line
+      parameters:
+        - { name: X-CSRF-Token, in: header, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: '{data: Cart}'
+        '404': { description: cart_item_not_found }
+        '419': { description: CSRF token invalid }
+  /v1/checkout:
+    get:
+      summary: Checkout bootstrap — cart, account hints, saved address, countries
+      responses:
+        '200':
+          description: '{data: {cart, user, address, countries}}'
+  /v1/orders:
+    post:
+      summary: Place an order from the current cart (guest or account)
+      parameters:
+        - { name: X-CSRF-Token, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, phone, first_name, last_name, line1, city, postal_code, country, delivery_method]
+              properties:
+                email: { type: string, format: email, maxLength: 320 }
+                phone: { type: string, maxLength: 40 }
+                first_name: { type: string, maxLength: 80 }
+                last_name: { type: string, maxLength: 80 }
+                line1: { type: string, maxLength: 180 }
+                line2: { type: ['string', 'null'], maxLength: 180 }
+                city: { type: string, maxLength: 80 }
+                postal_code: { type: string, maxLength: 20 }
+                country: { type: string, pattern: '^[A-Z]{2}$' }
+                delivery_method: { type: string, enum: [standard, express] }
+      responses:
+        '201':
+          description: '{data: {id, number}}'
+        '419': { description: CSRF token invalid }
+        '422': { description: 'cart_empty or fields.cart (product_unavailable, price_changed, insufficient_stock)' }
+  /v1/orders/{number}:
+    get:
+      summary: Order snapshot by number (session last_order or owning user)
+      parameters:
+        - { name: number, in: path, required: true, schema: { type: string, pattern: '^SP-[A-F0-9]{8}$' } }
+      responses:
+        '200': { description: 'Order snapshot with items, address and totals' }
+        '404': { description: Not found or not owned (never 403) }
+  /v1/me/orders:
+    get:
+      summary: Order list for a verified account
+      responses:
+        '200': { description: '{data: [order summaries]}' }
+        '401': { description: Authentication required }
+        '403': { description: email_unverified }
+  /v1/admin/orders:
+    get:
+      summary: Admin order list with filters (ROLE_ADMIN)
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 100 } }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/OrderStatus' } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200': { description: '{data: [summaries], meta: {page, per_page, total}, statuses: [..]}' }
+        '401': { description: Authentication required }
+        '403': { description: Admin role required }
+        '422': { description: Invalid filters }
+  /v1/admin/orders/{id}:
+    get:
+      summary: Admin order snapshot detail (ROLE_ADMIN)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: '{data: {order, next_statuses}}' }
+        '401': { description: Authentication required }
+        '403': { description: Admin role required }
+        '404': { description: Order not found }
+  /v1/admin/orders/{id}/status:
+    patch:
+      summary: Admin status transition (ROLE_ADMIN)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: X-CSRF-Token, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { $ref: '#/components/schemas/OrderStatus' }
+      responses:
+        '200': { description: '{data: {status, next_statuses}}' }
+        '401': { description: Authentication required }
+        '403': { description: Admin role required }
+        '404': { description: Order not found }
+        '419': { description: CSRF token invalid }
+        '422': { description: invalid_status_transition or invalid fields }
+components:
+  schemas:
+    OrderStatus:
+      type: string
+      enum: [pending_payment, paid, processing, shipped, delivered, cancelled, refunded]
+    Cart:
+      type: object
+      properties:
+        id: { type: integer }
+        count: { type: integer }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              quantity: { type: integer }
+              available: { type: boolean }
+              stock: { type: integer }
+              product:
+                type: object
+                properties:
+                  slug: { type: string }
+                  name: { type: string }
+                  image_url: { type: ['string', 'null'] }
+              variant:
+                type: object
+                properties:
+                  id: { type: integer }
+                  sku: { type: string }
+                  name: { type: string }
+              unit_price_cents: { type: integer }
+              line_total_cents: { type: integer }
+              net_unit_price_cents: { type: integer }
+              tax_cents: { type: integer }
+              currency: { type: string }
+        summary:
+          type: object
+          properties:
+            subtotal_cents: { type: integer }
+            net_subtotal_cents: { type: integer }
+            tax_cents: { type: integer }
+            currency: { type: string }
+            delivery_quotes:
+              type: object
+              properties:
+                standard: { type: integer }
+                express: { type: integer }
+            delivery_net_quotes:
+              type: object
+              properties:
+                standard: { type: integer }
+                express: { type: integer }
+            delivery_tax_quotes:
+              type: object
+              properties:
+                standard: { type: integer }
+                express: { type: integer }
+            free_standard_threshold: { type: integer }
+    ApiProblem:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+            fields:
+              type: object
+              additionalProperties:
+                type: array
+                items: { type: string }
+    ProductCard:
+      type: object
+      properties:
+        id: { type: integer }
+        slug: { type: string }
+        name: { type: string }
+        image_url: { type: ['string', 'null'] }
+        price_cents: { type: integer }
+        currency: { type: string }
+        compare_at_price_cents: { type: ['integer', 'null'] }
+        available: { type: boolean }

@@ -21,4 +21,8 @@ framework:
                     table_name: messenger_messages
                     queue_name: failed
                     auto_setup: false
-        routing: {}
+        routing:
+            Symfony\Component\Mailer\Messenger\SendEmailMessage: async
+            App\Application\Catalog\RefreshCatalogCache: async
+            App\Application\Catalog\WarmStorefrontCache: async
+            App\Application\Commerce\RefreshExchangeRates: async

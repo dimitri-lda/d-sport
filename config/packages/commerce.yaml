@@ -1,0 +1,85 @@
+parameters:
+    env(COMMERCE_DEFAULT_COUNTRY): 'DE'
+    env(GEOIP_URL): 'https://ipwho.is/{ip}'
+    env(MYFIN_EUR_BYN_URL): 'https://myfin.by/converter/eur-byn'
+    env(WALUTOMAT_EUR_PLN_URL): ''
+    env(WALUTOMAT_API_TOKEN): ''
+    env(DELIVERY_STANDARD_NET_CENTS): '590'
+    env(DELIVERY_EXPRESS_NET_CENTS): '1290'
+    env(DELIVERY_FREE_SHIPPING_GROSS_EUR_CENTS): '5000'
+
+    commerce.default_country: '%env(COMMERCE_DEFAULT_COUNTRY)%'
+    commerce.locales: ['en', 'ru', 'pl']
+    commerce.fallback_market: 'eu_global'
+    commerce.geoip_url: '%env(GEOIP_URL)%'
+    commerce.exchange_rates.myfin_eur_byn_url: '%env(MYFIN_EUR_BYN_URL)%'
+    commerce.exchange_rates.walutomat_eur_pln_url: '%env(WALUTOMAT_EUR_PLN_URL)%'
+    commerce.exchange_rates.walutomat_api_token: '%env(WALUTOMAT_API_TOKEN)%'
+    commerce.delivery.standard_net_cents: '%env(int:DELIVERY_STANDARD_NET_CENTS)%'
+    commerce.delivery.express_net_cents: '%env(int:DELIVERY_EXPRESS_NET_CENTS)%'
+    commerce.delivery.free_shipping_gross_eur_cents: '%env(int:DELIVERY_FREE_SHIPPING_GROSS_EUR_CENTS)%'
+
+    commerce.markets:
+        BY: { code: belarus, currency: BYN, locale: ru, vat_basis_points: 2000 }
+        PL: { code: poland, currency: PLN, locale: pl, vat_basis_points: 2300 }
+
+    # Standard VAT rates for ordinary physical goods, basis points.
+    # Review against the European Commission TEDB before changing a rate.
+    commerce.eu_vat_basis_points:
+        AT: 2000
+        BE: 2100
+        BG: 2000
+        HR: 2500
+        CY: 1900
+        CZ: 2100
+        DK: 2500
+        EE: 2400
+        FI: 2550
+        FR: 2000
+        DE: 1900
+        GR: 2400
+        HU: 2700
+        IE: 2300
+        IT: 2200
+        LV: 2100
+        LT: 2100
+        LU: 1700
+        MT: 1800
+        NL: 2100
+        PL: 2300
+        PT: 2300
+        RO: 2100
+        SK: 2300
+        SI: 2200
+        ES: 2100
+        SE: 2500
+
+    commerce.country_names:
+        BY: { en: Belarus, ru: 'Беларусь', pl: 'Białoruś' }
+        PL: { en: Poland, ru: 'Польша', pl: 'Polska' }
+        AT: { en: Austria, ru: 'Австрия', pl: 'Austria' }
+        BE: { en: Belgium, ru: 'Бельгия', pl: 'Belgia' }
+        BG: { en: Bulgaria, ru: 'Болгария', pl: 'Bułgaria' }
+        HR: { en: Croatia, ru: 'Хорватия', pl: 'Chorwacja' }
+        CY: { en: Cyprus, ru: 'Кипр', pl: 'Cypr' }
+        CZ: { en: Czechia, ru: 'Чехия', pl: 'Czechy' }
+        DK: { en: Denmark, ru: 'Дания', pl: 'Dania' }
+        EE: { en: Estonia, ru: 'Эстония', pl: 'Estonia' }
+        FI: { en: Finland, ru: 'Финляндия', pl: 'Finlandia' }
+        FR: { en: France, ru: 'Франция', pl: 'Francja' }
+        DE: { en: Germany, ru: 'Германия', pl: 'Niemcy' }
+        GR: { en: Greece, ru: 'Греция', pl: 'Grecja' }
+        HU: { en: Hungary, ru: 'Венгрия', pl: 'Węgry' }
+        IE: { en: Ireland, ru: 'Ирландия', pl: 'Irlandia' }
+        IT: { en: Italy, ru: 'Италия', pl: 'Włochy' }
+        LV: { en: Latvia, ru: 'Латвия', pl: 'Łotwa' }
+        LT: { en: Lithuania, ru: 'Литва', pl: 'Litwa' }
+        LU: { en: Luxembourg, ru: 'Люксембург', pl: 'Luksemburg' }
+        MT: { en: Malta, ru: 'Мальта', pl: 'Malta' }
+        NL: { en: Netherlands, ru: 'Нидерланды', pl: 'Holandia' }
+        PT: { en: Portugal, ru: 'Португалия', pl: 'Portugalia' }
+        RO: { en: Romania, ru: 'Румыния', pl: 'România' }
+        SK: { en: Slovakia, ru: 'Словакия', pl: 'Slovensko' }
+        SI: { en: Slovenia, ru: 'Словения', pl: 'Słowenia' }
+        ES: { en: Spain, ru: 'Испания', pl: 'Hiszpania' }
+        SE: { en: Sweden, ru: 'Швеция', pl: 'Szwecja' }

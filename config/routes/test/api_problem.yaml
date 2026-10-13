@@ -1,0 +1,4 @@
+test_api_problem_probe:
+    path: /api/test-probe/problem
+    controller: App\Tests\Support\ApiProblemProbeController::problem
+    methods: [GET]

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\EventSubscriber;
 
+use App\Domain\DomainException;
+use App\Presentation\Http\ApiProblem;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
@@ -29,26 +31,52 @@ final class ApiExceptionSubscriber implements EventSubscriberInterface
         }
 
         $exception = $event->getThrowable();
-        $status = $exception instanceof HttpExceptionInterface ? $exception->getStatusCode() : Response::HTTP_INTERNAL_SERVER_ERROR;
-        $code = match ($status) {
-            400 => 'bad_request',
-            401 => 'unauthorized',
-            403 => 'forbidden',
-            404 => 'not_found',
-            405 => 'method_not_allowed',
-            422 => 'validation_failed',
-            429 => 'too_many_requests',
-            503 => 'service_unavailable',
-            default => $status >= 500 ? 'internal_error' : 'http_error',
-        };
+        $fields = [];
 
-        $headers = $exception instanceof HttpExceptionInterface ? $exception->getHeaders() : [];
+        if ($exception instanceof ApiProblem) {
+            $status = $exception->status;
+            $code = $exception->errorCode;
+            $message = $exception->getMessage();
+            $fields = $exception->fields;
+            $headers = [];
+        } else {
+            if ($exception instanceof DomainException) {
+                $status = Response::HTTP_UNPROCESSABLE_ENTITY;
+            } else {
+                $status = $exception instanceof HttpExceptionInterface
+                    ? $exception->getStatusCode()
+                    : Response::HTTP_INTERNAL_SERVER_ERROR;
+            }
+            $code = match ($status) {
+                400 => 'bad_request',
+                401 => 'unauthorized',
+                403 => 'forbidden',
+                404 => 'not_found',
+                405 => 'method_not_allowed',
+                422 => 'validation_failed',
+                429 => 'too_many_requests',
+                503 => 'service_unavailable',
+                default => $status >= 500 ? 'internal_error' : 'http_error',
+            };
+            if ($exception instanceof DomainException) {
+                $code = 'domain_rule_violated';
+                $message = $exception->getMessage();
+            } else {
+                $message = Response::$statusTexts[$status] ?? 'Request failed';
+            }
+
+            $headers = $exception instanceof HttpExceptionInterface ? $exception->getHeaders() : [];
+        }
+
+        $error = [
+            'code' => $code,
+            'message' => $message,
+        ];
+        if ([] !== $fields) {
+            $error['fields'] = $fields;
+        }
+
         $headers['Cache-Control'] = 'no-store';
-        $event->setResponse(new JsonResponse([
-            'error' => [
-                'code' => $code,
-                'message' => Response::$statusTexts[$status] ?? 'Request failed',
-            ],
-        ], $status, $headers));
+        $event->setResponse(new JsonResponse(['error' => $error], $status, $headers));
     }
 }

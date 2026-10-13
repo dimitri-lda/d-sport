@@ -1,0 +1,231 @@
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Link, NavLink, Outlet, useNavigate } from 'react-router';
+import { CART_QUERY_KEY, getCart } from '../api/cart';
+import { useApp } from '../app/useApp';
+import { MarketSwitcher } from './MarketSwitcher';
+import { BackendStatus } from './BackendStatus';
+
+function navLinkClass({ isActive }: { isActive: boolean }): string {
+  return [
+    'rounded-full px-4 py-2 text-sm font-medium transition-colors',
+    isActive
+      ? 'bg-ink text-cream'
+      : 'text-ink-mute hover:bg-sand hover:text-ink',
+  ].join(' ');
+}
+
+export function StoreLayout() {
+  const { t, ready, failed, retryContext, user, signOut } = useApp();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const navigate = useNavigate();
+  const cart = useQuery({
+    queryKey: CART_QUERY_KEY,
+    queryFn: ({ signal }) => getCart(signal),
+    enabled: ready,
+  });
+  const cartCount = cart.data?.count ?? 0;
+
+  async function onLogout(): Promise<void> {
+    setMenuOpen(false);
+    try {
+      await signOut();
+    } finally {
+      void navigate('/', { replace: true });
+    }
+  }
+
+  const authLinks = (
+    <>
+      <NavLink
+        to="/cart"
+        className={navLinkClass}
+        onClick={() => setMenuOpen(false)}
+      >
+        {t.nav.cart}
+        {cartCount > 0 ? (
+          <span
+            className="ml-1.5 inline-flex h-5 min-w-5 items-center
+              justify-center rounded-full bg-cobalt px-1 text-xs
+              font-semibold text-cream"
+          >
+            {cartCount}
+          </span>
+        ) : null}
+      </NavLink>
+      {user === null ? (
+        <>
+          <NavLink
+            to="/login"
+            className={navLinkClass}
+            onClick={() => setMenuOpen(false)}
+          >
+            {t.nav.login}
+          </NavLink>
+          <NavLink
+            to="/register"
+            className={navLinkClass}
+            onClick={() => setMenuOpen(false)}
+          >
+            {t.nav.register}
+          </NavLink>
+        </>
+      ) : (
+        <>
+          <NavLink
+            to="/account/orders"
+            className={navLinkClass}
+            onClick={() => setMenuOpen(false)}
+          >
+            {t.nav.orders}
+          </NavLink>
+          <NavLink
+            to="/profile"
+            className={navLinkClass}
+            onClick={() => setMenuOpen(false)}
+          >
+            {user.display_name}
+          </NavLink>
+          <span
+            className="rounded-full px-2 py-0.5 text-xs font-medium"
+            title={user.email_verified ? t.nav.verified : t.nav.unverified}
+          >
+            <span
+              className={`inline-block h-2 w-2 rounded-full ${
+                user.email_verified ? 'bg-cobalt' : 'bg-dune'
+              }`}
+              aria-label={
+                user.email_verified ? t.nav.verified : t.nav.unverified
+              }
+            />
+          </span>
+          <button
+            type="button"
+            className="rounded-full px-4 py-2 text-sm font-medium text-ink-mute
+              transition-colors hover:bg-sand hover:text-ink"
+            onClick={() => void onLogout()}
+          >
+            {t.nav.logout}
+          </button>
+        </>
+      )}
+    </>
+  );
+
+  return (
+    <div className="flex min-h-screen flex-col">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-3
+          focus:rounded-md focus:bg-ink focus:px-4 focus:py-2 focus:text-cream"
+      >
+        {t.nav.skip_to_content}
+      </a>
+
+      <header className="sticky top-0 z-40 border-b border-dune/70 bg-cream/85 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3 sm:px-6">
+          <Link to="/" className="flex items-baseline gap-2">
+            <span className="font-display text-xl font-bold tracking-tight">
+              Sport E
+            </span>
+            <span className="hidden text-xs text-ink-mute sm:inline">
+              {t.nav.brand_tagline}
+            </span>
+          </Link>
+
+          <nav
+            aria-label="Main"
+            className="ml-auto hidden items-center gap-1 sm:flex"
+          >
+            <NavLink to="/" end className={navLinkClass}>
+              {t.nav.home}
+            </NavLink>
+            <NavLink to="/shop" className={navLinkClass}>
+              {t.nav.shop}
+            </NavLink>
+            {authLinks}
+          </nav>
+
+          <div className="hidden sm:block">
+            <MarketSwitcher />
+          </div>
+
+          <button
+            type="button"
+            className="ml-auto rounded-md border border-dune px-3 py-2 text-sm sm:hidden"
+            aria-expanded={menuOpen}
+            aria-controls="mobile-nav"
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            ☰
+          </button>
+        </div>
+
+        {menuOpen ? (
+          <nav
+            id="mobile-nav"
+            aria-label="Main"
+            className="border-t border-dune/70 px-4 py-3 sm:hidden"
+          >
+            <div className="flex flex-col gap-2">
+              <NavLink
+                to="/"
+                end
+                className={navLinkClass}
+                onClick={() => setMenuOpen(false)}
+              >
+                {t.nav.home}
+              </NavLink>
+              <NavLink
+                to="/shop"
+                className={navLinkClass}
+                onClick={() => setMenuOpen(false)}
+              >
+                {t.nav.shop}
+              </NavLink>
+              {authLinks}
+              <MarketSwitcher />
+            </div>
+          </nav>
+        ) : null}
+      </header>
+
+      <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 sm:px-6">
+        {ready ? (
+          <Outlet />
+        ) : failed ? (
+          <div role="alert" className="py-16 text-center">
+            <p className="font-display text-xl font-semibold">
+              {t.common.error}
+            </p>
+            <button
+              type="button"
+              onClick={retryContext}
+              className="mt-4 rounded-full bg-cobalt px-6 py-2 text-sm font-semibold
+                text-cream"
+            >
+              {t.common.retry}
+            </button>
+          </div>
+        ) : (
+          <p className="py-16 text-center text-ink-mute">{t.common.loading}</p>
+        )}
+      </main>
+
+      <footer className="mt-16 border-t border-dune/70 bg-sand/40">
+        <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+          <p className="font-display text-sm font-semibold">Sport E</p>
+          <p className="mt-1 text-xs text-ink-mute">{t.nav.brand_tagline}</p>
+          <details className="mt-4 text-xs text-ink-mute">
+            <summary className="cursor-pointer select-none">
+              Development
+            </summary>
+            <div className="mt-3 max-w-md">
+              <BackendStatus />
+            </div>
+          </details>
+        </div>
+      </footer>
+    </div>
+  );
+}

@@ -1,16 +1,96 @@
 @import 'tailwindcss' source('./');
+@import '@fontsource-variable/space-grotesk';
+@import '@fontsource-variable/dm-sans';
+
+@theme {
+  --font-display:
+    'Space Grotesk Variable', 'Space Grotesk', ui-sans-serif, sans-serif;
+  --font-body: 'DM Sans Variable', 'DM Sans', ui-sans-serif, sans-serif;
+
+  /* Cream/sand atmosphere */
+  --color-cream: #f5f1e7;
+  --color-sand: #e9e1cd;
+  --color-dune: #d8cdb2;
+  /* Ink/navy surfaces */
+  --color-ink: #0d1526;
+  --color-ink-soft: #182642;
+  --color-ink-mute: #3d4d70;
+  /* Electric cobalt accent */
+  --color-cobalt: #0043ff;
+  --color-cobalt-soft: #dbe4ff;
+}
 
 @layer base {
+  html {
+    font-family: var(--font-body);
+  }
+
   body {
-    @apply m-0 min-h-screen bg-slate-50 text-slate-900 antialiased;
+    @apply m-0 min-h-screen bg-cream text-ink antialiased;
+    background-image:
+      radial-gradient(
+        1200px 500px at 80% -10%,
+        rgb(0 67 255 / 0.07),
+        transparent 60%
+      ),
+      radial-gradient(
+        900px 400px at 0% 30%,
+        rgb(13 21 38 / 0.05),
+        transparent 55%
+      );
   }
 
   button,
   a {
-    @apply focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-700;
+    @apply focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cobalt;
   }
 
   button:not(:disabled) {
     @apply cursor-pointer;
+  }
+
+  ::selection {
+    @apply bg-cobalt text-cream;
+  }
+}
+
+@layer components {
+  /* Staggered page-load reveal */
+  .reveal {
+    animation: rise 0.55s cubic-bezier(0.22, 0.9, 0.3, 1) both;
+    animation-delay: calc(var(--reveal-order, 0) * 90ms);
+  }
+
+  /* Fine grid/noise texture for hero surfaces */
+  .texture-grid {
+    background-image:
+      linear-gradient(rgb(245 241 231 / 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(245 241 231 / 0.05) 1px, transparent 1px);
+    background-size: 44px 44px;
+  }
+
+  .texture-noise {
+    background-image: radial-gradient(
+      rgb(255 255 255 / 0.6) 0.5px,
+      transparent 0.5px
+    );
+    background-size: 4px 4px;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    animation: none;
   }
 }
