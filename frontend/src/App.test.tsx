@@ -96,6 +96,7 @@ function mockFetch(
   overrides: {
     contextFailuresBeforeSuccess?: number;
     productDetail?: unknown;
+    user?: unknown;
   } = {},
 ) {
   let contextCalls = 0;
@@ -115,8 +116,14 @@ function mockFetch(
           }),
         );
       }
+      const payload =
+        overrides.user === undefined
+          ? contextPayload
+          : {
+              data: { ...contextPayload.data, user: overrides.user },
+            };
       return Promise.resolve(
-        new Response(JSON.stringify(contextPayload), {
+        new Response(JSON.stringify(payload), {
           headers: { 'Content-Type': 'application/json' },
         }),
       );
@@ -178,6 +185,45 @@ it('renders the storefront home with navigation and featured products', async ()
     '/api/v1/store/home',
     expect.objectContaining({ credentials: 'same-origin' }),
   );
+  client.clear();
+});
+
+it('keeps the desktop header below xl behind the hamburger menu', async () => {
+  mockFetch({
+    user: {
+      id: 7,
+      email: 'flow@example.test',
+      display_name: 'Flow User',
+      role: 'user',
+      email_verified: true,
+    },
+  });
+  const client = renderApp('/');
+
+  const desktopNav = await screen.findByRole('navigation', { name: 'Main' });
+  expect(desktopNav).toHaveClass('xl:flex');
+  expect(desktopNav).not.toHaveClass('sm:flex');
+
+  const burger = screen.getByRole('button', { name: '☰' });
+  expect(burger).toHaveClass('xl:hidden');
+
+  // The verification indicator lives inside the profile link, not as a
+  // standalone sibling nav item, and logout stays left-aligned like links.
+  const profileLink = await screen.findByRole('link', { name: /Flow User/ });
+  expect(profileLink.querySelector('[aria-label="Verified"]')).not.toBeNull();
+  expect(await screen.findByRole('button', { name: 'Log out' })).toHaveClass(
+    'text-left',
+  );
+
+  await userEvent.click(burger);
+  const mobileNav = document.getElementById('mobile-nav');
+  if (mobileNav === null) {
+    throw new Error('mobile nav did not open');
+  }
+  expect(mobileNav).toHaveClass('xl:hidden');
+  for (const labelled of mobileNav.querySelectorAll('[aria-label]')) {
+    expect(labelled.closest('a')).not.toBeNull();
+  }
   client.clear();
 });
 

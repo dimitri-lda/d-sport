@@ -1,37 +1,14 @@
 import { useState } from 'react';
-import type { FormEvent, ReactNode } from 'react';
+import type { FormEvent } from 'react';
 import { updatePreferences } from '../api/context';
 import type { Locale } from '../api/context';
 import { useApp } from '../app/useApp';
+import { SelectShell } from './forms/SelectShell';
 
 const SELECT_CLASSES =
   'h-9 w-full appearance-none rounded-full border border-dune bg-cream pl-3.5 pr-9 text-sm text-ink ' +
   'transition-colors hover:border-ink-mute/50 focus-visible:outline-2 focus-visible:outline-offset-2 ' +
   'focus-visible:outline-cobalt';
-
-function SelectShell({
-  className,
-  children,
-}: {
-  className?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className={`relative ${className ?? ''}`}>
-      {children}
-      <svg
-        aria-hidden="true"
-        viewBox="0 0 20 20"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.75}
-        className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-mute"
-      >
-        <path d="M6 8l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    </div>
-  );
-}
 
 export function MarketSwitcher() {
   const { market } = useApp();

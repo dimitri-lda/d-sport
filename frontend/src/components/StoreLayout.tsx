@@ -81,28 +81,26 @@ export function StoreLayout() {
           </NavLink>
           <NavLink
             to="/profile"
-            className={navLinkClass}
+            className={(state) =>
+              `${navLinkClass(state)} inline-flex items-center gap-2`
+            }
             onClick={() => setMenuOpen(false)}
           >
             {user.display_name}
-          </NavLink>
-          <span
-            className="rounded-full px-2 py-0.5 text-xs font-medium"
-            title={user.email_verified ? t.nav.verified : t.nav.unverified}
-          >
             <span
-              className={`inline-block h-2 w-2 rounded-full ${
+              className={`inline-block h-2 w-2 shrink-0 rounded-full ${
                 user.email_verified ? 'bg-cobalt' : 'bg-dune'
               }`}
+              title={user.email_verified ? t.nav.verified : t.nav.unverified}
               aria-label={
                 user.email_verified ? t.nav.verified : t.nav.unverified
               }
             />
-          </span>
+          </NavLink>
           <button
             type="button"
-            className="rounded-full px-4 py-2 text-sm font-medium text-ink-mute
-              transition-colors hover:bg-sand hover:text-ink"
+            className="rounded-full px-4 py-2 text-left text-sm font-medium
+              text-ink-mute transition-colors hover:bg-sand hover:text-ink"
             onClick={() => void onLogout()}
           >
             {t.nav.logout}
@@ -138,7 +136,7 @@ export function StoreLayout() {
 
           <nav
             aria-label="Main"
-            className="ml-auto hidden shrink-0 items-center gap-1 sm:flex"
+            className="ml-auto hidden shrink-0 items-center gap-1 xl:flex"
           >
             <NavLink to="/" end className={navLinkClass}>
               {t.nav.home}
@@ -149,13 +147,13 @@ export function StoreLayout() {
             {authLinks}
           </nav>
 
-          <div className="hidden shrink-0 sm:block">
+          <div className="hidden shrink-0 xl:block">
             <MarketSwitcher />
           </div>
 
           <button
             type="button"
-            className="ml-auto rounded-md border border-dune px-3 py-2 text-sm sm:hidden"
+            className="ml-auto rounded-md border border-dune px-3 py-2 text-sm xl:hidden"
             aria-expanded={menuOpen}
             aria-controls="mobile-nav"
             onClick={() => setMenuOpen((open) => !open)}
@@ -168,7 +166,7 @@ export function StoreLayout() {
           <nav
             id="mobile-nav"
             aria-label="Main"
-            className="border-t border-dune/70 px-4 py-3 sm:hidden"
+            className="border-t border-dune/70 px-4 py-3 xl:hidden"
           >
             <div className="flex flex-col gap-2">
               <NavLink
