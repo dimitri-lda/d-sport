@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router';
@@ -188,7 +188,7 @@ it('renders the storefront home with navigation and featured products', async ()
   client.clear();
 });
 
-it('keeps the desktop header below xl behind the hamburger menu', async () => {
+it('keeps the desktop header below lg behind the hamburger menu', async () => {
   mockFetch({
     user: {
       id: 7,
@@ -201,11 +201,19 @@ it('keeps the desktop header below xl behind the hamburger menu', async () => {
   const client = renderApp('/');
 
   const desktopNav = await screen.findByRole('navigation', { name: 'Main' });
-  expect(desktopNav).toHaveClass('xl:flex');
+  expect(desktopNav).toHaveClass('lg:flex');
   expect(desktopNav).not.toHaveClass('sm:flex');
 
   const burger = screen.getByRole('button', { name: '☰' });
-  expect(burger).toHaveClass('xl:hidden');
+  expect(burger).toHaveClass('lg:hidden');
+
+  // Market controls live only in the footer, never in the header or menu.
+  const header = screen.getByRole('banner');
+  expect(within(header).queryByLabelText('Country')).toBeNull();
+  expect(within(header).queryByLabelText('Language')).toBeNull();
+  const footer = screen.getByRole('contentinfo');
+  expect(within(footer).getByLabelText('Country')).toBeInTheDocument();
+  expect(within(footer).getByLabelText('Language')).toBeInTheDocument();
 
   // The verification indicator lives inside the profile link, not as a
   // standalone sibling nav item, and logout stays left-aligned like links.
@@ -220,7 +228,9 @@ it('keeps the desktop header below xl behind the hamburger menu', async () => {
   if (mobileNav === null) {
     throw new Error('mobile nav did not open');
   }
-  expect(mobileNav).toHaveClass('xl:hidden');
+  expect(mobileNav).toHaveClass('lg:hidden');
+  expect(within(mobileNav).queryByLabelText('Country')).toBeNull();
+  expect(within(mobileNav).queryByLabelText('Language')).toBeNull();
   for (const labelled of mobileNav.querySelectorAll('[aria-label]')) {
     expect(labelled.closest('a')).not.toBeNull();
   }

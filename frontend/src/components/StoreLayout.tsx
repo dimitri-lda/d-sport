@@ -136,7 +136,7 @@ export function StoreLayout() {
 
           <nav
             aria-label="Main"
-            className="ml-auto hidden shrink-0 items-center gap-1 xl:flex"
+            className="ml-auto hidden shrink-0 items-center gap-1 lg:flex"
           >
             <NavLink to="/" end className={navLinkClass}>
               {t.nav.home}
@@ -147,13 +147,9 @@ export function StoreLayout() {
             {authLinks}
           </nav>
 
-          <div className="hidden shrink-0 xl:block">
-            <MarketSwitcher />
-          </div>
-
           <button
             type="button"
-            className="ml-auto rounded-md border border-dune px-3 py-2 text-sm xl:hidden"
+            className="ml-auto rounded-md border border-dune px-3 py-2 text-sm lg:hidden"
             aria-expanded={menuOpen}
             aria-controls="mobile-nav"
             onClick={() => setMenuOpen((open) => !open)}
@@ -166,7 +162,7 @@ export function StoreLayout() {
           <nav
             id="mobile-nav"
             aria-label="Main"
-            className="border-t border-dune/70 px-4 py-3 xl:hidden"
+            className="border-t border-dune/70 px-4 py-3 lg:hidden"
           >
             <div className="flex flex-col gap-2">
               <NavLink
@@ -185,7 +181,6 @@ export function StoreLayout() {
                 {t.nav.shop}
               </NavLink>
               {authLinks}
-              <MarketSwitcher />
             </div>
           </nav>
         ) : null}
@@ -213,18 +208,31 @@ export function StoreLayout() {
         )}
       </main>
 
-      <footer className="mt-16 border-t border-dune/70 bg-sand/40">
+      <footer className="mt-16 bg-ink text-cream">
         <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-          <p className="font-display text-sm font-semibold">Sport E</p>
-          <p className="mt-1 text-xs text-ink-mute">{t.nav.brand_tagline}</p>
-          <details className="mt-4 text-xs text-ink-mute">
-            <summary className="cursor-pointer select-none">
-              Development
-            </summary>
-            <div className="mt-3 max-w-md">
-              <BackendStatus />
+          <div className="flex flex-col gap-1">
+            <p className="font-display text-lg font-semibold tracking-tight">
+              Sport E
+            </p>
+            <p className="max-w-md text-xs text-cream/60">
+              {t.nav.brand_tagline}
+            </p>
+          </div>
+
+          <div className="mt-8 flex flex-col gap-6 border-t border-cream/15 pt-5 lg:flex-row lg:items-end lg:justify-between">
+            <details className="text-xs text-cream/60">
+              <summary className="cursor-pointer select-none transition-colors hover:text-cream">
+                Development
+              </summary>
+              <div className="mt-3 max-w-md">
+                <BackendStatus />
+              </div>
+            </details>
+
+            <div className="w-full lg:w-auto">
+              <MarketSwitcher />
             </div>
-          </details>
+          </div>
         </div>
       </footer>
     </div>
