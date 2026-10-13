@@ -1,0 +1,16 @@
+@import 'tailwindcss' source('./');
+
+@layer base {
+  body {
+    @apply m-0 min-h-screen bg-slate-50 text-slate-900 antialiased;
+  }
+
+  button,
+  a {
+    @apply focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-700;
+  }
+
+  button:not(:disabled) {
+    @apply cursor-pointer;
+  }
+}

@@ -1,0 +1,40 @@
+{
+	admin localhost:2019
+	auto_https disable_redirects
+	skip_install_trust
+	http_port 8080
+	https_port 8443
+	frankenphp {
+		num_threads 2
+		max_threads 4
+		max_wait_time 5s
+	}
+}
+
+(dev_api) {
+	encode zstd gzip
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+	@api path /api /api/*
+	handle @api {
+		root * /app/public
+		rewrite * /index.php
+		php
+	}
+	handle {
+		respond "Symfony API is running. Frontend: http://localhost:5173" 200
+	}
+}
+
+http://:8080 {
+	import dev_api
+}
+
+https://localhost:8443 {
+	tls internal
+	import dev_api
+}

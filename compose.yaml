@@ -1,0 +1,111 @@
+name: ${COMPOSE_PROJECT_NAME:-sport-e}
+
+x-app: &app
+  image: ${COMPOSE_PROJECT_NAME:-sport-e}-app:${BUILD_VERSION:-dev}
+  build:
+    context: .
+    target: prod
+  environment: &app-env
+    APP_ENV: prod
+    APP_DEBUG: "0"
+    APP_SECRET: ${APP_SECRET:?Run make init or supply APP_SECRET}
+    APP_NAME: ${APP_NAME:-Sport E}
+    BUILD_VERSION: ${BUILD_VERSION:-dev}
+    DATABASE_URL: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-sport_e}?serverVersion=18&charset=utf8
+    DB_CONNECTION_TIMEOUT: ${DB_CONNECTION_TIMEOUT:-2}
+    DB_STATEMENT_TIMEOUT_MS: ${DB_STATEMENT_TIMEOUT_MS:-3000}
+    PGCONNECT_TIMEOUT: ${DB_CONNECTION_TIMEOUT:-2}
+    PGOPTIONS: -c statement_timeout=${DB_STATEMENT_TIMEOUT_MS:-3000}
+    REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+    REDIS_CONNECT_TIMEOUT: ${REDIS_CONNECT_TIMEOUT:-1}
+    REDIS_READ_TIMEOUT: ${REDIS_READ_TIMEOUT:-1}
+    MESSENGER_TRANSPORT_DSN: ${MESSENGER_TRANSPORT_DSN:-doctrine://default?auto_setup=false}
+    TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+    TRUSTED_HOSTS: ${TRUSTED_HOSTS:-^localhost$}
+    PHP_MEMORY_LIMIT: ${PHP_MEMORY_LIMIT:-128M}
+  init: true
+  restart: unless-stopped
+  stop_grace_period: 30s
+  security_opt:
+    - no-new-privileges:true
+
+services:
+  backend:
+    <<: *app
+    environment:
+      <<: *app-env
+      SERVER_NAME: ${SERVER_NAME:-localhost}
+      PUBLIC_HTTPS_PORT: ${PUBLIC_HTTPS_PORT:-443}
+      FRANKENPHP_WORKERS: ${FRANKENPHP_WORKERS:-2}
+      FRANKENPHP_MAX_THREADS: ${FRANKENPHP_MAX_THREADS:-4}
+    cpus: ${WEB_CPUS:-1}
+    mem_limit: ${WEB_MEMORY_LIMIT:-768M}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+
+  migrate:
+    <<: *app
+    command: ["php", "bin/console", "doctrine:migrations:migrate", "--no-interaction", "--allow-no-migration"]
+    restart: "no"
+    healthcheck:
+      disable: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    <<: *app
+    environment:
+      <<: *app-env
+      PHP_MEMORY_LIMIT: ${WORKER_PHP_MEMORY_LIMIT:-256M}
+    command: ["php", "bin/console", "messenger:consume", "async", "--time-limit=${MESSENGER_TIME_LIMIT:-3600}", "--memory-limit=${MESSENGER_MEMORY_LIMIT:-128M}", "--sleep=1000000", "--no-interaction"]
+    stop_grace_period: 60s
+    mem_limit: ${WORKER_MEMORY_LIMIT:-384M}
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "php", "/usr/local/bin/worker-healthcheck.php"]
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+
+  postgres:
+    image: postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-sport_e}
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    command: ["postgres", "-c", "max_connections=${POSTGRES_MAX_CONNECTIONS:-50}"]
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:8.10.2-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0
+    command: ["redis-server", "--maxmemory", "${REDIS_MAXMEMORY:-128mb}", "--maxmemory-policy", "allkeys-lru", "--save", "", "--appendonly", "no"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:

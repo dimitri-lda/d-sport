@@ -1,0 +1,59 @@
+{
+    "name": "sport-e/foundation",
+    "description": "Symfony API foundation for Sport E",
+    "type": "project",
+    "license": "proprietary",
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "require": {
+        "php": ">=8.5",
+        "ext-ctype": "*",
+        "ext-iconv": "*",
+        "ext-intl": "*",
+        "ext-pdo_pgsql": "*",
+        "ext-redis": "*",
+        "doctrine/doctrine-bundle": "^3.0",
+        "doctrine/doctrine-migrations-bundle": "^3.0",
+        "doctrine/orm": "^3.0",
+        "symfony/cache": "8.1.*",
+        "symfony/console": "8.1.*",
+        "symfony/doctrine-bridge": "8.1.*",
+        "symfony/doctrine-messenger": "8.1.*",
+        "symfony/dotenv": "8.1.*",
+        "symfony/framework-bundle": "8.1.*",
+        "symfony/messenger": "8.1.*",
+        "symfony/monolog-bundle": "^4.0",
+        "symfony/runtime": "8.1.*",
+        "symfony/serializer": "8.1.*",
+        "symfony/validator": "8.1.*",
+        "symfony/yaml": "8.1.*"
+    },
+    "require-dev": {
+        "friendsofphp/php-cs-fixer": "^3.0",
+        "phpstan/phpstan": "^2.0",
+        "phpstan/phpstan-doctrine": "^2.0",
+        "phpstan/phpstan-symfony": "^2.0",
+        "phpunit/phpunit": "^13.0",
+        "symfony/browser-kit": "8.1.*"
+    },
+    "config": {
+        "allow-plugins": { "symfony/runtime": true },
+        "sort-packages": true
+    },
+    "autoload": { "psr-4": { "App\\": "src/", "DoctrineMigrations\\": "migrations/" } },
+    "autoload-dev": { "psr-4": { "App\\Tests\\": "tests/" } },
+    "scripts": {
+        "test": "phpunit",
+        "analyse": "phpstan analyse --memory-limit=512M",
+        "style": "php-cs-fixer fix --dry-run --diff",
+        "style:fix": "php-cs-fixer fix",
+        "lint": [
+            "@composer validate --strict",
+            "@analyse",
+            "@style",
+            "@php bin/console lint:yaml config",
+            "@php bin/console lint:container",
+            "@php bin/console doctrine:schema:validate --skip-sync"
+        ]
+    }
+}

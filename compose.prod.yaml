@@ -1,0 +1,9 @@
+# Always use explicit -f flags so compose.override.yaml is NOT loaded.
+services:
+  backend:
+    build:
+      target: prod
+    ports:
+      - "${HTTP_PORT:-80}:8080"
+      - "${HTTPS_PORT:-443}:8443"
+      - "${HTTPS_PORT:-443}:8443/udp"

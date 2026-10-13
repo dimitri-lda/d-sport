@@ -1,0 +1,56 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")"
+command=${1:-help}
+if [ "$#" -gt 0 ]; then shift; fi
+compose() { docker compose "$@"; }
+prod() { docker compose --env-file "${PROD_ENV:-.env.prod.local}" -f compose.yaml -f compose.prod.yaml "$@"; }
+case "$command" in
+    init)
+        sh scripts/init-env.sh
+        compose build backend frontend
+        compose run --rm --no-deps backend composer install --no-interaction --prefer-dist
+        compose run --rm --no-deps frontend npm ci
+        compose up -d --wait --wait-timeout 180
+        ;;
+    up) compose up -d --build --wait --wait-timeout 180 ;;
+    down) compose down ;;
+    logs) compose logs -f --tail=100 "$@" ;;
+    test)
+        sh scripts/backend-test.sh
+        compose exec -T frontend npm test
+        ;;
+    lint)
+        compose exec -T backend composer lint
+        compose exec -T backend php bin/console doctrine:migrations:up-to-date
+        compose exec -T frontend npm run typecheck
+        compose exec -T frontend npm run lint
+        compose exec -T frontend npm run format:check
+        ;;
+    format)
+        compose exec -T backend composer style:fix
+        compose exec -T frontend npm run format
+        ;;
+    build)
+        compose exec -T frontend npm run build
+        docker build --target prod -t sport-e-app:production .
+        ;;
+    migrate) compose run --rm migrate ;;
+    console) compose exec backend php bin/console "$@" ;;
+    shell) compose exec backend sh ;;
+    worker-logs) compose logs -f --tail=100 worker ;;
+    worker-start) compose up -d worker ;;
+    worker-stop) compose stop worker ;;
+    failed-show) compose exec backend php bin/console messenger:failed:show "$@" ;;
+    failed-retry) compose exec backend php bin/console messenger:failed:retry "$@" ;;
+    prod-build) prod build ;;
+    prod-up) prod up -d --wait --wait-timeout 180 ;;
+    prod-down) prod down ;;
+    help)
+        echo 'Usage: ./dev <command> [arguments]'
+        echo 'init up down logs test lint format build migrate console shell'
+        echo 'worker-logs worker-start worker-stop failed-show failed-retry'
+        echo 'prod-build prod-up prod-down (PROD_ENV defaults to .env.prod.local)'
+        ;;
+    *) echo "Unknown command: $command" >&2; exit 2 ;;
+esac

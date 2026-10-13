@@ -1,0 +1,38 @@
+parameters:
+    app.name: 'Sport E'
+    app.build_version: 'dev'
+    env(APP_NAME): 'Sport E'
+    env(BUILD_VERSION): 'dev'
+    env(TRUSTED_PROXIES): ''
+    env(TRUSTED_HOSTS): '^localhost$|^127\.0\.0\.1$|^backend$'
+    env(DB_CONNECTION_TIMEOUT): '2'
+    env(DB_STATEMENT_TIMEOUT_MS): '2000'
+    env(REDIS_CONNECT_TIMEOUT): '1'
+    env(REDIS_READ_TIMEOUT): '1'
+
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+
+    App\:
+        resource: '../src/'
+
+    app.redis_connection:
+        class: Redis
+        factory: ['Symfony\Component\Cache\Adapter\RedisAdapter', 'createConnection']
+        # lazy=true returns Symfony's resettable Redis proxy. The declared Redis
+        # type hides ResetInterface from autoconfiguration, so register explicitly.
+        tags:
+            - { name: kernel.reset, method: reset }
+        arguments:
+            - '%env(REDIS_URL)%'
+            - timeout: '%env(float:REDIS_CONNECT_TIMEOUT)%'
+              read_timeout: '%env(float:REDIS_READ_TIMEOUT)%'
+              retry_interval: 0
+              persistent: 0
+              lazy: true
+
+    App\Health\RedisProbe:
+        arguments:
+            $redis: '@app.redis_connection'
