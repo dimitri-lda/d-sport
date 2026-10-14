@@ -3,6 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router';
 import { CART_QUERY_KEY, getCart } from '../api/cart';
 import { useApp } from '../app/useApp';
+import { format } from '../lib/i18n/dictionaries';
+import { formatMoney } from '../lib/i18n/format';
 import { MarketSwitcher } from './MarketSwitcher';
 import { BackendStatus } from './BackendStatus';
 
@@ -16,7 +18,8 @@ function navLinkClass({ isActive }: { isActive: boolean }): string {
 }
 
 export function StoreLayout() {
-  const { t, ready, failed, retryContext, user, signOut } = useApp();
+  const { t, ready, failed, retryContext, user, market, locale, signOut } =
+    useApp();
   const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
   const cart = useQuery({
@@ -54,22 +57,13 @@ export function StoreLayout() {
         ) : null}
       </NavLink>
       {user === null ? (
-        <>
-          <NavLink
-            to="/login"
-            className={navLinkClass}
-            onClick={() => setMenuOpen(false)}
-          >
-            {t.nav.login}
-          </NavLink>
-          <NavLink
-            to="/register"
-            className={navLinkClass}
-            onClick={() => setMenuOpen(false)}
-          >
-            {t.nav.register}
-          </NavLink>
-        </>
+        <NavLink
+          to="/login"
+          className={navLinkClass}
+          onClick={() => setMenuOpen(false)}
+        >
+          {t.nav.login}
+        </NavLink>
       ) : (
         <>
           <NavLink
@@ -81,28 +75,26 @@ export function StoreLayout() {
           </NavLink>
           <NavLink
             to="/profile"
-            className={navLinkClass}
+            className={(state) =>
+              `${navLinkClass(state)} inline-flex items-center gap-2`
+            }
             onClick={() => setMenuOpen(false)}
           >
             {user.display_name}
-          </NavLink>
-          <span
-            className="rounded-full px-2 py-0.5 text-xs font-medium"
-            title={user.email_verified ? t.nav.verified : t.nav.unverified}
-          >
             <span
-              className={`inline-block h-2 w-2 rounded-full ${
+              className={`inline-block h-2 w-2 shrink-0 rounded-full ${
                 user.email_verified ? 'bg-cobalt' : 'bg-dune'
               }`}
+              title={user.email_verified ? t.nav.verified : t.nav.unverified}
               aria-label={
                 user.email_verified ? t.nav.verified : t.nav.unverified
               }
             />
-          </span>
+          </NavLink>
           <button
             type="button"
-            className="rounded-full px-4 py-2 text-sm font-medium text-ink-mute
-              transition-colors hover:bg-sand hover:text-ink"
+            className="rounded-full px-4 py-2 text-left text-sm font-medium
+              text-ink-mute transition-colors hover:bg-sand hover:text-ink"
             onClick={() => void onLogout()}
           >
             {t.nav.logout}
@@ -122,20 +114,49 @@ export function StoreLayout() {
         {t.nav.skip_to_content}
       </a>
 
+      <div className="hidden border-b border-dune/60 bg-ink text-cream/70 sm:block">
+        <ul className="mx-auto flex max-w-6xl items-center justify-center gap-8 px-4 py-1.5 text-xs sm:px-6">
+          {market === null ? null : (
+            <>
+              <li>
+                {format(t.nav.trust_delivery, {
+                  amount: formatMoney(
+                    market.free_standard_threshold,
+                    market.currency,
+                    locale,
+                  ),
+                })}
+              </li>
+              <li aria-hidden="true" className="text-cream/30">
+                ·
+              </li>
+            </>
+          )}
+          <li>{t.nav.trust_express}</li>
+          <li aria-hidden="true" className="text-cream/30">
+            ·
+          </li>
+          <li>{t.nav.trust_vat}</li>
+        </ul>
+      </div>
+
       <header className="sticky top-0 z-40 border-b border-dune/70 bg-cream/85 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3 sm:px-6">
-          <Link to="/" className="flex items-baseline gap-2">
-            <span className="font-display text-xl font-bold tracking-tight">
+          <Link
+            to="/"
+            className="flex min-w-0 items-baseline gap-2 whitespace-nowrap"
+          >
+            <span className="shrink-0 font-display text-xl font-bold tracking-tight">
               Sport E
             </span>
-            <span className="hidden text-xs text-ink-mute sm:inline">
+            <span className="hidden min-w-0 truncate text-xs text-ink-mute sm:inline">
               {t.nav.brand_tagline}
             </span>
           </Link>
 
           <nav
             aria-label="Main"
-            className="ml-auto hidden items-center gap-1 sm:flex"
+            className="ml-auto hidden shrink-0 items-center gap-1 lg:flex"
           >
             <NavLink to="/" end className={navLinkClass}>
               {t.nav.home}
@@ -146,13 +167,9 @@ export function StoreLayout() {
             {authLinks}
           </nav>
 
-          <div className="hidden sm:block">
-            <MarketSwitcher />
-          </div>
-
           <button
             type="button"
-            className="ml-auto rounded-md border border-dune px-3 py-2 text-sm sm:hidden"
+            className="ml-auto rounded-md border border-dune px-3 py-2 text-sm lg:hidden"
             aria-expanded={menuOpen}
             aria-controls="mobile-nav"
             onClick={() => setMenuOpen((open) => !open)}
@@ -165,7 +182,7 @@ export function StoreLayout() {
           <nav
             id="mobile-nav"
             aria-label="Main"
-            className="border-t border-dune/70 px-4 py-3 sm:hidden"
+            className="border-t border-dune/70 px-4 py-3 lg:hidden"
           >
             <div className="flex flex-col gap-2">
               <NavLink
@@ -184,7 +201,6 @@ export function StoreLayout() {
                 {t.nav.shop}
               </NavLink>
               {authLinks}
-              <MarketSwitcher />
             </div>
           </nav>
         ) : null}
@@ -212,18 +228,31 @@ export function StoreLayout() {
         )}
       </main>
 
-      <footer className="mt-16 border-t border-dune/70 bg-sand/40">
+      <footer className="mt-16 bg-ink text-cream">
         <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-          <p className="font-display text-sm font-semibold">Sport E</p>
-          <p className="mt-1 text-xs text-ink-mute">{t.nav.brand_tagline}</p>
-          <details className="mt-4 text-xs text-ink-mute">
-            <summary className="cursor-pointer select-none">
-              Development
-            </summary>
-            <div className="mt-3 max-w-md">
-              <BackendStatus />
+          <div className="flex flex-col gap-1">
+            <p className="font-display text-lg font-semibold tracking-tight">
+              Sport E
+            </p>
+            <p className="max-w-md text-xs text-cream/60">
+              {t.nav.brand_tagline}
+            </p>
+          </div>
+
+          <div className="mt-8 flex flex-col gap-6 border-t border-cream/15 pt-5 lg:flex-row lg:items-end lg:justify-between">
+            <details className="text-xs text-cream/60">
+              <summary className="cursor-pointer select-none transition-colors hover:text-cream">
+                Development
+              </summary>
+              <div className="mt-3 max-w-md">
+                <BackendStatus />
+              </div>
+            </details>
+
+            <div className="w-full lg:w-auto">
+              <MarketSwitcher />
             </div>
-          </details>
+          </div>
         </div>
       </footer>
     </div>

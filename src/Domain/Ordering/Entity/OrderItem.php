@@ -11,6 +11,7 @@ use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'order_items')]
+#[ORM\Index(name: 'order_items_order_idx', columns: ['order_id'])]
 class OrderItem
 {
     #[ORM\Id]

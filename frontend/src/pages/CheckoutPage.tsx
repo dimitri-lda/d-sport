@@ -10,6 +10,7 @@ import { Button } from '../components/forms/Button';
 import { FormError } from '../components/forms/FormError';
 import { FormField } from '../components/forms/FormField';
 import { ProductImage } from '../components/ProductImage';
+import { SelectShell } from '../components/forms/SelectShell';
 import { formatMoney } from '../lib/i18n/format';
 import { toSubmissionError } from '../lib/forms';
 
@@ -231,25 +232,28 @@ function CheckoutForm({ payload }: { payload: CheckoutPayload }) {
                 >
                   {t.checkout.country}
                 </label>
-                <select
-                  id="checkout-country"
-                  name="country"
-                  value={country}
-                  required
-                  aria-invalid={
-                    fields.country !== undefined && fields.country.length > 0
-                  }
-                  onChange={(event) => setCountry(event.target.value)}
-                  className="rounded-md border border-dune bg-white px-3 py-2
-                    text-sm text-ink outline-none transition-colors
-                    focus:border-cobalt focus:ring-2 focus:ring-cobalt/30"
-                >
-                  {countries.map((entry) => (
-                    <option key={entry.code} value={entry.code}>
-                      {entry.name}
-                    </option>
-                  ))}
-                </select>
+                <SelectShell className="w-full">
+                  <select
+                    id="checkout-country"
+                    name="country"
+                    value={country}
+                    required
+                    aria-invalid={
+                      fields.country !== undefined && fields.country.length > 0
+                    }
+                    onChange={(event) => setCountry(event.target.value)}
+                    className="w-full appearance-none rounded-md border border-dune
+                      bg-white pl-3 pr-10 py-2 text-sm text-ink outline-none
+                      transition-colors focus:border-cobalt
+                      focus:ring-2 focus:ring-cobalt/30"
+                  >
+                    {countries.map((entry) => (
+                      <option key={entry.code} value={entry.code}>
+                        {entry.name}
+                      </option>
+                    ))}
+                  </select>
+                </SelectShell>
                 {fields.country !== undefined && fields.country.length > 0 ? (
                   <p role="alert" className="text-xs text-red-600">
                     {fields.country[0]}

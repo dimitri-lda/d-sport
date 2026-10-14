@@ -11,9 +11,11 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 /**
  * External rate sources, chained per currency with graceful degradation:
- * BYN tries Myfin then the NBRB API, PLN tries Walutomat then the NBP API.
- * Provider decimals are extracted from raw response tokens — never through
- * float-typed JSON fields — so rates keep their exact decimal precision.
+ * BYN tries the official NBRB API then the Myfin HTML scrape, PLN tries
+ * the official NBP API then Walutomat — central-bank APIs are primary,
+ * third-party sources are the fallback. Provider decimals are extracted
+ * from raw response tokens — never through float-typed JSON fields — so
+ * rates keep their exact decimal precision.
  * Nothing here logs request bodies or credentials.
  */
 final class HttpExchangeRateFetcher implements ExchangeRateFetcher
@@ -35,12 +37,12 @@ final class HttpExchangeRateFetcher implements ExchangeRateFetcher
         $currency = strtoupper($currency);
         $sources = match ($currency) {
             'BYN' => [
-                ['myfin', $this->myfinByn(...)],
                 ['nbrb', $this->nbrbByn(...)],
+                ['myfin', $this->myfinByn(...)],
             ],
             'PLN' => [
-                ['walutomat', $this->walutomatPln(...)],
                 ['nbp', $this->nbpPln(...)],
+                ['walutomat', $this->walutomatPln(...)],
             ],
             default => [],
         };

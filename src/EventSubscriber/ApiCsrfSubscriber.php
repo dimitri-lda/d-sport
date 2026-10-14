@@ -14,14 +14,16 @@ use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 
 /**
  * Requires a valid `X-CSRF-Token` header (token id `api`) on every mutating
- * /api/v1 request. The Shopify orders webhook is exempt — it authenticates
- * through the provider signature instead of a session token.
+ * /api/v1 request.
+ *
+ * The Shopify orders webhook will need an exemption here — it authenticates
+ * through the provider signature instead of a session token — but that
+ * exemption must come back together with the signature verification that
+ * justifies it, not before.
  */
 final class ApiCsrfSubscriber implements EventSubscriberInterface
 {
     public const TOKEN_ID = 'api';
-
-    private const EXEMPT_PATHS = ['/api/v1/webhooks/shopify/orders'];
 
     public function __construct(private readonly CsrfTokenManagerInterface $csrfTokenManager)
     {
@@ -43,10 +45,6 @@ final class ApiCsrfSubscriber implements EventSubscriberInterface
         if (\in_array($request->getMethod(), $safe, true)) {
             return;
         }
-        if (\in_array($path, self::EXEMPT_PATHS, true)) {
-            return;
-        }
-
         $token = $request->headers->get('X-CSRF-Token', '');
         if (!$this->csrfTokenManager->isTokenValid(new CsrfToken(self::TOKEN_ID, $token))) {
             throw new ApiProblem('csrf_invalid', 'The CSRF token is invalid.', 419);

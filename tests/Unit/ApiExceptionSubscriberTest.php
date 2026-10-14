@@ -8,6 +8,7 @@ use App\Domain\DomainException;
 use App\EventSubscriber\ApiExceptionSubscriber;
 use App\Presentation\Http\ApiProblem;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
@@ -23,7 +24,7 @@ final class ApiExceptionSubscriberTest extends TestCase
             new \RuntimeException('Database password: do-not-expose'),
         );
 
-        (new ApiExceptionSubscriber())->onException($event);
+        $this->subscriber()->onException($event);
 
         $response = $event->getResponse();
         self::assertNotNull($response);
@@ -40,7 +41,7 @@ final class ApiExceptionSubscriberTest extends TestCase
             'items' => ['Variant SKU-1 is out of stock.'],
         ]));
 
-        (new ApiExceptionSubscriber())->onException($event);
+        $this->subscriber()->onException($event);
 
         $response = $event->getResponse();
         self::assertNotNull($response);
@@ -56,7 +57,7 @@ final class ApiExceptionSubscriberTest extends TestCase
     {
         $event = $this->event('/api/v1/cart', new ApiProblem('cart_not_found', 'Cart not found.', 404));
 
-        (new ApiExceptionSubscriber())->onException($event);
+        $this->subscriber()->onException($event);
 
         $response = $event->getResponse();
         self::assertNotNull($response);
@@ -66,17 +67,17 @@ final class ApiExceptionSubscriberTest extends TestCase
         );
     }
 
-    public function testDomainExceptionMapsTo422WithSafeCode(): void
+    public function testDomainExceptionMapsTo422WithGenericMessage(): void
     {
         $event = $this->event('/api/v1/orders/1', new DomainException('Order cannot transition.'));
 
-        (new ApiExceptionSubscriber())->onException($event);
+        $this->subscriber()->onException($event);
 
         $response = $event->getResponse();
         self::assertNotNull($response);
         self::assertSame(422, $response->getStatusCode());
         self::assertJsonStringEqualsJsonString(
-            '{"error":{"code":"domain_rule_violated","message":"Order cannot transition."}}',
+            '{"error":{"code":"domain_rule_violated","message":"The request violates a business rule."}}',
             (string) $response->getContent(),
         );
     }
@@ -85,9 +86,14 @@ final class ApiExceptionSubscriberTest extends TestCase
     {
         $event = $this->event('/some-page', new \RuntimeException('boom'));
 
-        (new ApiExceptionSubscriber())->onException($event);
+        $this->subscriber()->onException($event);
 
         self::assertNull($event->getResponse());
+    }
+
+    private function subscriber(): ApiExceptionSubscriber
+    {
+        return new ApiExceptionSubscriber(new NullLogger());
     }
 
     private function event(string $path, \Throwable $exception): ExceptionEvent

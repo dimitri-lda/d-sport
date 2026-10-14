@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router';
@@ -25,6 +25,7 @@ function contextPayload(loggedIn: boolean) {
         locale: 'en',
         vat_basis_points: 1900,
         exchange_rate: '1.00000000',
+        free_standard_threshold: 5000,
       },
       countries: [{ code: 'DE', name: 'Germany' }],
       locales: ['en', 'ru', 'pl'],
@@ -52,6 +53,7 @@ function mockFetch(
   options: {
     loggedIn?: boolean;
     loginStatus?: number;
+    patchRequiresConfirmation?: boolean;
   } = {},
 ) {
   let loggedIn = options.loggedIn ?? false;
@@ -103,7 +105,21 @@ function mockFetch(
         ? respond(profilePayload)
         : respond({ error: { code: 'unauthorized', message: 'x' } }, 401);
     }
+    if (url === '/api/v1/auth/confirm-password' && method === 'GET') {
+      return respond({ data: { confirmed: false, confirmed_at: null } });
+    }
     if (url === '/api/v1/profile' && method === 'PATCH') {
+      if (options.patchRequiresConfirmation) {
+        return respond(
+          {
+            error: {
+              code: 'password_confirmation_required',
+              message: 'Confirm your password to change the email address.',
+            },
+          },
+          403,
+        );
+      }
       return respond({ data: { user: { ...user, display_name: 'Renamed' } } });
     }
     if (url === '/api/v1/store/home' || url.startsWith('/api/v1/products')) {
@@ -160,6 +176,30 @@ describe('identity pages', () => {
       email: 'flow@example.test',
       _remember_me: false,
     });
+    client.clear();
+  });
+
+  it('logs out and refreshes the context to the anonymous state', async () => {
+    const fetch = mockFetch({ loggedIn: true });
+    const client = renderApp('/');
+
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Log out' }),
+    );
+
+    // A stale cached context must not survive logout: the nav reverts to
+    // the anonymous state only after a forced server refresh.
+    expect(
+      await screen.findByRole('link', { name: 'Log in' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Log out' }),
+    ).not.toBeInTheDocument();
+
+    const contextCalls = fetch.mock.calls.filter(
+      (call) => String(call[0]) === '/api/v1/context',
+    );
+    expect(contextCalls).toHaveLength(2);
     client.clear();
   });
 
@@ -251,6 +291,27 @@ describe('identity pages', () => {
     // Prefilled identity + address data.
     expect(screen.getByLabelText('Display name')).toHaveValue('Flow User');
     expect(screen.getByLabelText('City')).toHaveValue('Berlin');
+    client.clear();
+  });
+
+  it('sends an unconfirmed email change to the confirm-password page', async () => {
+    mockFetch({ loggedIn: true, patchRequiresConfirmation: true });
+    const client = renderApp('/profile');
+
+    const account = await screen.findByRole('region', { name: 'Identity' });
+    const emailField = within(account).getByLabelText('Email');
+    await userEvent.clear(emailField);
+    await userEvent.type(emailField, 'renamed@example.test');
+    await userEvent.click(
+      within(account).getByRole('button', { name: 'Save changes' }),
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: 'Confirm your password' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Confirm your password to change your email address.'),
+    ).toBeInTheDocument();
     client.clear();
   });
 });

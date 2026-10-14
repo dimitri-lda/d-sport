@@ -68,19 +68,17 @@ final class ApiCsrfSubscriberTest extends TestCase
         $this->addToAssertionCount(3);
     }
 
-    public function testShopifyWebhookIsExempt(): void
+    public function testWebhookPathsAreNotExempt(): void
     {
-        $this->subscriber(false)->onKernelRequest($this->event('POST', '/api/v1/webhooks/shopify/orders'));
-        $this->addToAssertionCount(1);
-    }
-
-    public function testOtherWebhooksAreNotExempt(): void
-    {
-        try {
-            $this->subscriber(false)->onKernelRequest($this->event('POST', '/api/v1/webhooks/other'));
-            self::fail('Expected ApiProblem.');
-        } catch (ApiProblem $problem) {
-            self::assertSame(419, $problem->status);
+        // No exemption may exist before the signature verification that would
+        // justify it — the Shopify orders webhook route does not exist yet.
+        foreach (['/api/v1/webhooks/shopify/orders', '/api/v1/webhooks/other'] as $path) {
+            try {
+                $this->subscriber(false)->onKernelRequest($this->event('POST', $path));
+                self::fail('Expected ApiProblem.');
+            } catch (ApiProblem $problem) {
+                self::assertSame(419, $problem->status);
+            }
         }
     }
 }

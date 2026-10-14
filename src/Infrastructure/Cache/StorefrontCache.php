@@ -26,12 +26,19 @@ use Symfony\Component\Messenger\MessageBusInterface;
 final class StorefrontCache
 {
     private const GROUPS = ['tree', 'list', 'card'];
+    /**
+     * Part of every entry key: bump when a cached payload's shape changes so
+     * entries written by an older release are orphaned at deploy time rather
+     * than read back missing the new fields.
+     */
+    private const PAYLOAD_VERSION = 2;
     private const GENERATION_KEY = 'generation';
     private const REFRESH_DEBOUNCE_SECONDS = 60;
+    private const WARN_INTERVAL_SECONDS = 300;
     private const LOCK_TTL_SECONDS = 10.0;
     private const LOCK_WAIT_MS = 500;
 
-    /** @var array<string, true> */
+    /** @var array<string, int> */
     private array $warned = [];
 
     /**
@@ -139,6 +146,7 @@ final class StorefrontCache
         return implode('.', [
             $this->prefix,
             $group,
+            'v'.self::PAYLOAD_VERSION,
             $generation,
             hash('sha256', $logicalKey),
         ]);
@@ -344,16 +352,19 @@ final class StorefrontCache
     }
 
     /**
-     * One warning per operation for the service lifetime — bounded
-     * operational state (the operation names are code constants), not
-     * request state, so it stays worker-safe under a Redis outage.
+     * At most one warning per operation per WARN_INTERVAL_SECONDS — a
+     * permanently suppressed warning would hide an ongoing outage from a
+     * long-running worker, while an unthrottled one would flood the log.
+     * The map stays worker-safe: the operation names are code constants.
      */
     private function warn(string $operation, \Throwable $exception): void
     {
-        if (isset($this->warned[$operation])) {
+        $now = $this->now();
+        $last = $this->warned[$operation] ?? null;
+        if (null !== $last && $now - $last < self::WARN_INTERVAL_SECONDS) {
             return;
         }
-        $this->warned[$operation] = true;
+        $this->warned[$operation] = $now;
         $this->logger->warning('Storefront cache operation failed.', [
             'operation' => $operation,
             'exception' => $exception::class,

@@ -8,9 +8,11 @@ use App\Application\Identity\PasswordConfirmationService;
 use App\Domain\Identity\Entity\User;
 use App\Presentation\Http\ApiProblem;
 use App\Presentation\Http\JsonBody;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\CurrentUser;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
@@ -18,8 +20,11 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('ROLE_USER')]
 final class ConfirmPasswordController
 {
-    public function __construct(private readonly PasswordConfirmationService $confirmations)
-    {
+    public function __construct(
+        private readonly PasswordConfirmationService $confirmations,
+        #[Autowire(service: 'limiter.password_confirmation')]
+        private readonly RateLimiterFactory $confirmLimiter,
+    ) {
     }
 
     #[Route('/api/v1/auth/confirm-password', name: 'api_v1_auth_confirm_password_status', methods: ['GET'])]
@@ -39,6 +44,13 @@ final class ConfirmPasswordController
     #[Route('/api/v1/auth/confirm-password', name: 'api_v1_auth_confirm_password', methods: ['POST'])]
     public function confirm(Request $request, #[CurrentUser] User $user): Response
     {
+        // Keyed by the authenticated user: without a cap this endpoint is an
+        // unlimited password-guessing oracle against a live session.
+        $limit = $this->confirmLimiter->create((string) $user->getId())->consume();
+        if (!$limit->isAccepted()) {
+            throw new ApiProblem('too_many_requests', 'Too many password confirmation attempts. Please wait.', 429);
+        }
+
         $password = JsonBody::string(JsonBody::decode($request), 'password') ?? '';
 
         if (!$this->confirmations->confirm($user, $password, $request->getSession(), self::now())) {

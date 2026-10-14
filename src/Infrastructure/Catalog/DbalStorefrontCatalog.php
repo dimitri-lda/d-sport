@@ -233,17 +233,19 @@ final class DbalStorefrontCatalog implements StorefrontCatalog
         );
     }
 
-    /** Shared card projection: identity, localized name, first image, net EUR price, stock. */
+    /** Shared card projection: identity, localized name, brand, first image, net EUR price, stock. */
     private function cardSelect(): string
     {
         return <<<'SQL'
             SELECT p.id, p.slug, p.price_cents_net, p.compare_at_price_cents_net,
                    COALESCE(pt.name, pte.name) AS name,
+                   b.name AS brand,
                    (SELECT i.url FROM product_images i WHERE i.product_id = p.id ORDER BY i.position LIMIT 1) AS image_url,
                    (SELECT COALESCE(sum(v.stock), 0) FROM product_variants v WHERE v.product_id = p.id) AS stock
             FROM products p
             JOIN product_translations pte ON pte.product_id = p.id AND pte.locale = :fallback
             LEFT JOIN product_translations pt ON pt.product_id = p.id AND pt.locale = :locale
+            LEFT JOIN brands b ON b.id = p.brand_id
             SQL;
     }
 

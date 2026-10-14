@@ -58,6 +58,8 @@ paths:
                           locale: { type: string }
                           vat_basis_points: { type: integer }
                           exchange_rate: { type: string }
+                          free_standard_threshold:
+                            { type: integer, description: Free standard delivery threshold in market gross cents }
                       countries:
                         type: array
                         items:
@@ -558,6 +560,7 @@ components:
         id: { type: integer }
         slug: { type: string }
         name: { type: string }
+        brand: { type: ['string', 'null'] }
         image_url: { type: ['string', 'null'] }
         price_cents: { type: integer }
         currency: { type: string }

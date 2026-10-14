@@ -15,6 +15,7 @@ import { Button } from '../components/forms/Button';
 import { FormError } from '../components/forms/FormError';
 import { FormField } from '../components/forms/FormField';
 import { toSubmissionError } from '../lib/forms';
+import { ApiError } from '../api/client';
 import type { ApiFields } from '../api/client';
 
 const PROFILE_KEY = ['account', 'profile'] as const;
@@ -131,6 +132,16 @@ function ProfileSections({ data }: { data: ProfilePayload }) {
       await queryClient.invalidateQueries({ queryKey: PROFILE_KEY });
       setIdentity({ ...INITIAL_SECTION, saved: true });
     } catch (error) {
+      // Read the ApiError code before toSubmissionError flattens it into a
+      // generic banner — an unconfirmed email change routes to the
+      // confirm-password flow and comes back to this page.
+      if (
+        error instanceof ApiError &&
+        error.code === 'password_confirmation_required'
+      ) {
+        void navigate('/confirm-password?next=/profile');
+        return;
+      }
       failure(error, setIdentity);
     }
   }

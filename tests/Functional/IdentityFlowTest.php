@@ -8,9 +8,12 @@ use App\Application\Identity\VerificationLinkSigner;
 use App\Domain\Identity\Entity\PasswordResetToken;
 use App\Domain\Identity\Entity\User;
 use App\Domain\Identity\Repository\UserRepository;
+use App\Tests\Double\FailingCartManager;
+use App\Tests\Support\FlushesRedis;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 
 /**
@@ -19,6 +22,8 @@ use Symfony\Component\RateLimiter\RateLimiterFactory;
  */
 final class IdentityFlowTest extends WebTestCase
 {
+    use FlushesRedis;
+
     private const PASSWORD = 'Sport-E!2026';
 
     protected function setUp(): void
@@ -26,6 +31,9 @@ final class IdentityFlowTest extends WebTestCase
         if ('1' !== getenv('RUN_INFRASTRUCTURE_TESTS')) {
             self::markTestSkipped('Use make test to run against isolated PostgreSQL and Redis.');
         }
+        // All tests share the 127.0.0.1 client IP and the Redis-backed
+        // limiter storage — flush it so windows stay per-test.
+        self::flushRedis();
     }
 
     private static function csrf(KernelBrowser $client): string
@@ -337,6 +345,34 @@ final class IdentityFlowTest extends WebTestCase
         self::assertResponseStatusCodeSame(302);
         self::assertSame('/verify-email?verified=1', $client->getResponse()->headers->get('Location'));
         self::assertTrue(self::userByEmail($email)->isEmailVerified());
+
+        // The link is single-use: the nonce rotated on success, so the
+        // replayed URL fails even though nothing about it changed.
+        $client->request('GET', $path);
+        self::assertResponseStatusCodeSame(403);
+        self::assertSame('verification_link_invalid', self::payload($client)['error']['code']);
+    }
+
+    public function testLoginSucceedsWhenTheGuestCartMergeFails(): void
+    {
+        $client = self::createClient();
+        $email = uniqid('mergefail', true).'@example.test';
+        $em = self::em();
+        $hasher = self::getContainer()->get(UserPasswordHasherInterface::class);
+        \assert($hasher instanceof UserPasswordHasherInterface);
+        $user = new User($email, 'pending', 'Merge Fail');
+        $user->changePassword($hasher->hashPassword($user, self::PASSWORD));
+        $em->persist($user);
+        $em->flush();
+
+        // The guest-cart merge on the login path is armed to throw:
+        // authentication itself must still succeed.
+        FailingCartManager::failNextMerge();
+        self::login($client, $email, self::PASSWORD);
+        self::assertResponseStatusCodeSame(200);
+
+        $client->request('GET', '/api/v1/context');
+        self::assertSame($email, self::payload($client)['data']['user']['email']);
     }
 
     public function testUnauthenticatedRequestsGetJson401NotRedirect(): void
@@ -345,6 +381,32 @@ final class IdentityFlowTest extends WebTestCase
         $client->request('GET', '/api/v1/profile');
         self::assertResponseStatusCodeSame(401);
         self::assertStringContainsString('json', (string) $client->getResponse()->headers->get('content-type'));
+    }
+
+    public function testApiResponsesCarryNoStoreCacheControl(): void
+    {
+        $client = self::createClient();
+        // The context endpoint uses the session (csrf token), so the
+        // framework's session listener applies its own auto cache headers
+        // afterwards — assert the FINAL header, not the subscriber's intent.
+        $client->request('GET', '/api/v1/context');
+        self::assertResponseStatusCodeSame(200);
+        self::assertStringContainsString(
+            'no-store',
+            (string) $client->getResponse()->headers->get('Cache-Control'),
+        );
+    }
+
+    public function testContextExposesTheMarketFreeDeliveryThreshold(): void
+    {
+        $client = self::createClient();
+        $client->request('GET', '/api/v1/context');
+        self::assertResponseStatusCodeSame(200);
+        $market = self::payload($client)['data']['market'] ?? null;
+        self::assertIsArray($market);
+        // EUR markets price at the configured €50 gross threshold directly.
+        self::assertSame('EUR', $market['currency']);
+        self::assertSame(5000, $market['free_standard_threshold']);
     }
 
     public function testResendVerificationIsThrottled(): void
@@ -462,5 +524,83 @@ final class IdentityFlowTest extends WebTestCase
         $client->request('GET', '/api/v1/profile');
         self::assertResponseStatusCodeSame(401);
         self::assertNull(self::em()->getRepository(User::class)->findByEmail($email));
+    }
+
+    public function testEmailChangeRequiresRecentPasswordConfirmation(): void
+    {
+        $client = self::createClient();
+        $email = uniqid('emailchange', true).'@example.test';
+        self::register($client, $email);
+        // Deterministic count: the confirm limiter keys on user id and its
+        // storage is shared Redis.
+        $limiter = self::getContainer()->get('limiter.password_confirmation');
+        \assert($limiter instanceof RateLimiterFactory);
+        $limiter->create((string) self::userByEmail($email)->getId())->reset();
+
+        // A display-name-only edit needs no confirmation.
+        self::jsonRequest($client, 'PATCH', '/api/v1/profile', [
+            'display_name' => 'Renamed User',
+            'email' => $email,
+        ], self::csrf($client));
+        self::assertResponseStatusCodeSame(200);
+        self::assertSame('Renamed User', self::payload($client)['data']['user']['display_name']);
+
+        // An email change is refused while unconfirmed.
+        $newEmail = uniqid('emailchange-new', true).'@example.test';
+        self::jsonRequest($client, 'PATCH', '/api/v1/profile', [
+            'display_name' => 'Renamed User',
+            'email' => $newEmail,
+        ], self::csrf($client));
+        self::assertResponseStatusCodeSame(403);
+        self::assertSame('password_confirmation_required', self::payload($client)['error']['code']);
+        self::assertSame($email, self::userByEmail($email)->getEmail());
+
+        // After a fresh confirmation the same PATCH goes through and the new
+        // address drops back to unverified.
+        self::jsonRequest($client, 'POST', '/api/v1/auth/confirm-password', [
+            'password' => self::PASSWORD,
+        ], self::csrf($client));
+        self::assertResponseStatusCodeSame(204);
+
+        self::jsonRequest($client, 'PATCH', '/api/v1/profile', [
+            'display_name' => 'Renamed User',
+            'email' => $newEmail,
+        ], self::csrf($client));
+        self::assertResponseStatusCodeSame(200);
+        self::assertSame($newEmail, self::payload($client)['data']['user']['email']);
+        self::assertFalse(self::payload($client)['data']['user']['email_verified']);
+        self::assertNull(self::em()->getRepository(User::class)->findByEmail($email));
+    }
+
+    public function testPasswordChangeInvalidatesOtherSessions(): void
+    {
+        $clientA = self::createClient();
+        $email = uniqid('sessions', true).'@example.test';
+        self::register($clientA, $email);
+
+        // A second browser holds an independent session for the same user.
+        $clientB = new KernelBrowser(self::$kernel);
+        self::login($clientB, $email, self::PASSWORD);
+        self::assertSame(200, $clientB->getResponse()->getStatusCode());
+        $clientB->request('GET', '/api/v1/profile');
+        self::assertSame(200, $clientB->getResponse()->getStatusCode());
+
+        self::jsonRequest($clientA, 'PUT', '/api/v1/profile/password', [
+            'current_password' => self::PASSWORD,
+            'password' => 'New-Pass!2026',
+            'password_confirmation' => 'New-Pass!2026',
+        ], self::csrf($clientA));
+        self::assertResponseStatusCodeSame(204);
+
+        // The other session's stored token no longer matches the refreshed
+        // user (EquatableInterface compares the password hash), so the
+        // context listener discards it on the next request.
+        $clientB->request('GET', '/api/v1/profile');
+        self::assertSame(401, $clientB->getResponse()->getStatusCode());
+
+        // The session that performed the change stays authenticated — its
+        // refreshed user already carries the new hash.
+        $clientA->request('GET', '/api/v1/profile');
+        self::assertResponseStatusCodeSame(200);
     }
 }

@@ -9,10 +9,14 @@ use App\Application\Identity\RegisterInput;
 use App\Application\Identity\RegistrationService;
 use App\EventSubscriber\ApiCsrfSubscriber;
 use App\Presentation\Http\Api\ContextView;
+use App\Presentation\Http\ApiProblem;
 use App\Presentation\Http\JsonBody;
+use Psr\Log\LoggerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 
@@ -24,12 +28,20 @@ final class RegisterController
         private readonly ContextView $contextView,
         private readonly CsrfTokenManagerInterface $csrfTokenManager,
         private readonly CartManager $cartManager,
+        private readonly LoggerInterface $logger,
+        #[Autowire(service: 'limiter.registration')]
+        private readonly RateLimiterFactory $registrationLimiter,
     ) {
     }
 
     #[Route('/api/v1/auth/register', name: 'api_v1_auth_register', methods: ['POST'])]
     public function __invoke(Request $request): JsonResponse
     {
+        $limit = $this->registrationLimiter->create($request->getClientIp())->consume();
+        if (!$limit->isAccepted()) {
+            throw new ApiProblem('too_many_requests', 'Too many registration attempts. Please wait.', 429);
+        }
+
         $body = JsonBody::decode($request);
         $input = new RegisterInput(
             JsonBody::string($body, 'display_name') ?? '',
@@ -44,9 +56,18 @@ final class RegisterController
         // Authenticate through the api firewall: its login success path
         // migrates the session id (fixation protection).
         $this->security->login($user, 'security.authenticator.json_login.api', 'api');
-        // Guest lines merge into the new account's cart (overwrite semantics).
+        // Guest lines merge into the new account's cart (overwrite
+        // semantics). Best-effort, as on login: a broken guest cart must
+        // not turn a successful registration into an error response.
         if ($request->hasSession()) {
-            $this->cartManager->mergeGuestIntoUser($request->getSession(), $user);
+            try {
+                $this->cartManager->mergeGuestIntoUser($request->getSession(), $user);
+            } catch (\Throwable $exception) {
+                $this->logger->warning('Guest cart merge failed during registration.', [
+                    'user_id' => $user->getId(),
+                    'exception' => $exception::class,
+                ]);
+            }
         }
         // Fresh token for the rotated session, returned inside the context.
         $this->csrfTokenManager->refreshToken(ApiCsrfSubscriber::TOKEN_ID);

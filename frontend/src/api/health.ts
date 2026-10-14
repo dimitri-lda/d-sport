@@ -11,7 +11,10 @@ export async function getLiveness(
     !('status' in payload) ||
     payload.status !== 'ok'
   ) {
-    throw new ApiError('invalid_response', 'API вернул некорректный ответ.');
+    throw new ApiError(
+      'invalid_response',
+      'The API returned an invalid response.',
+    );
   }
 
   return { status: 'ok' };

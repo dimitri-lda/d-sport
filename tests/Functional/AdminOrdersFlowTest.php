@@ -13,6 +13,7 @@ use App\Domain\Ordering\Entity\Order;
 use App\Domain\Ordering\Entity\OrderAddress;
 use App\Domain\Ordering\OrderStatus;
 use App\Tests\Double\RecordingCatalogCacheInvalidator;
+use App\Tests\Support\FlushesRedis;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
@@ -26,6 +27,8 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  */
 final class AdminOrdersFlowTest extends WebTestCase
 {
+    use FlushesRedis;
+
     private const PASSWORD = 'Sport-E!2026';
 
     protected function setUp(): void
@@ -33,6 +36,9 @@ final class AdminOrdersFlowTest extends WebTestCase
         if ('1' !== getenv('RUN_INFRASTRUCTURE_TESTS')) {
             self::markTestSkipped('Use make test to run against isolated PostgreSQL and Redis.');
         }
+        // All tests share the 127.0.0.1 client IP and the Redis-backed
+        // limiter storage — flush it so windows stay per-test.
+        self::flushRedis();
     }
 
     private static function csrf(KernelBrowser $client): string
@@ -292,7 +298,7 @@ final class AdminOrdersFlowTest extends WebTestCase
         foreach ([
             OrderStatus::Paid->value => [OrderStatus::Processing->value, OrderStatus::Refunded->value],
             OrderStatus::Processing->value => [OrderStatus::Shipped->value, OrderStatus::Cancelled->value],
-            OrderStatus::Shipped->value => [OrderStatus::Delivered->value],
+            OrderStatus::Shipped->value => [OrderStatus::Delivered->value, OrderStatus::Refunded->value],
             OrderStatus::Delivered->value => [OrderStatus::Refunded->value],
             OrderStatus::Refunded->value => [],
         ] as $target => $expectedNext) {
@@ -315,7 +321,7 @@ final class AdminOrdersFlowTest extends WebTestCase
         self::assertSame('not_found', self::payload($client)['error']['code']);
     }
 
-    public function testCancellationRestoresStockExactlyOnceAndRefundDoesNot(): void
+    public function testStockReleaseFollowsWhetherTheGoodsLeftTheWarehouse(): void
     {
         $client = self::createClient();
         self::admin($client);
@@ -333,22 +339,43 @@ final class AdminOrdersFlowTest extends WebTestCase
         self::assertSame(422, $client->getResponse()->getStatusCode());
         self::assertSame(5, self::stock($cancelled['variant_id']));
 
-        // Paid -> processing -> cancelled also releases; refund does not.
-        $refunded = self::reservedOrder(6, 2);
-        self::patchStatus($client, $refunded['order_id'], OrderStatus::Paid->value);
-        self::patchStatus($client, $refunded['order_id'], OrderStatus::Processing->value);
-        self::patchStatus($client, $refunded['order_id'], OrderStatus::Cancelled->value);
+        // Paid -> processing -> cancelled also releases.
+        $lateCancelled = self::reservedOrder(6, 2);
+        self::patchStatus($client, $lateCancelled['order_id'], OrderStatus::Paid->value);
+        self::patchStatus($client, $lateCancelled['order_id'], OrderStatus::Processing->value);
+        self::patchStatus($client, $lateCancelled['order_id'], OrderStatus::Cancelled->value);
         self::assertResponseStatusCodeSame(200);
-        self::assertSame(6, self::stock($refunded['variant_id']));
+        self::assertSame(6, self::stock($lateCancelled['variant_id']));
 
-        $kept = self::reservedOrder(7, 2);
-        self::patchStatus($client, $kept['order_id'], OrderStatus::Paid->value);
-        self::patchStatus($client, $kept['order_id'], OrderStatus::Refunded->value);
+        // Paid -> refunded releases: the goods never left the warehouse.
+        $earlyRefund = self::reservedOrder(7, 2);
+        self::patchStatus($client, $earlyRefund['order_id'], OrderStatus::Paid->value);
+        self::patchStatus($client, $earlyRefund['order_id'], OrderStatus::Refunded->value);
         self::assertResponseStatusCodeSame(200);
-        self::assertSame(5, self::stock($kept['variant_id']), 'Refunds never restore reserved stock.');
+        self::assertSame(7, self::stock($earlyRefund['variant_id']));
+
+        // Shipped -> refunded keeps the reservation: the goods are with
+        // the carrier.
+        $shipped = self::reservedOrder(8, 2);
+        self::patchStatus($client, $shipped['order_id'], OrderStatus::Paid->value);
+        self::patchStatus($client, $shipped['order_id'], OrderStatus::Processing->value);
+        self::patchStatus($client, $shipped['order_id'], OrderStatus::Shipped->value);
+        self::patchStatus($client, $shipped['order_id'], OrderStatus::Refunded->value);
+        self::assertResponseStatusCodeSame(200);
+        self::assertSame(6, self::stock($shipped['variant_id']));
+
+        // Delivered -> refunded keeps it too.
+        $delivered = self::reservedOrder(9, 2);
+        self::patchStatus($client, $delivered['order_id'], OrderStatus::Paid->value);
+        self::patchStatus($client, $delivered['order_id'], OrderStatus::Processing->value);
+        self::patchStatus($client, $delivered['order_id'], OrderStatus::Shipped->value);
+        self::patchStatus($client, $delivered['order_id'], OrderStatus::Delivered->value);
+        self::patchStatus($client, $delivered['order_id'], OrderStatus::Refunded->value);
+        self::assertResponseStatusCodeSame(200);
+        self::assertSame(7, self::stock($delivered['variant_id']));
     }
 
-    public function testOnlyCommittedCancellationsInvalidateTheCatalogCache(): void
+    public function testOnlyCommittedStockReleasesInvalidateTheCatalogCache(): void
     {
         $client = self::createClient();
         self::admin($client);
@@ -365,16 +392,29 @@ final class AdminOrdersFlowTest extends WebTestCase
         self::assertSame(422, $client->getResponse()->getStatusCode());
         self::assertSame(['productsChanged'], RecordingCatalogCacheInvalidator::calls());
 
-        // A refund commits but restores no stock: still no invalidation.
+        // A refund from paid releases stock too: one more invalidation.
         $refunded = self::reservedOrder(5, 1);
         self::patchStatus($client, $refunded['order_id'], OrderStatus::Paid->value);
         self::assertResponseStatusCodeSame(200);
         self::patchStatus($client, $refunded['order_id'], OrderStatus::Refunded->value);
         self::assertResponseStatusCodeSame(200);
         self::assertSame(
-            ['productsChanged'],
+            ['productsChanged', 'productsChanged'],
             RecordingCatalogCacheInvalidator::calls(),
-            'Only committed cancellations may invalidate the catalog cache.',
+        );
+
+        // A refund after shipping restores no stock: no invalidation.
+        $shipped = self::reservedOrder(5, 1);
+        foreach ([OrderStatus::Paid, OrderStatus::Processing, OrderStatus::Shipped] as $step) {
+            self::patchStatus($client, $shipped['order_id'], $step->value);
+            self::assertResponseStatusCodeSame(200);
+        }
+        self::patchStatus($client, $shipped['order_id'], OrderStatus::Refunded->value);
+        self::assertResponseStatusCodeSame(200);
+        self::assertSame(
+            ['productsChanged', 'productsChanged'],
+            RecordingCatalogCacheInvalidator::calls(),
+            'Only committed stock releases may invalidate the catalog cache.',
         );
     }
 }

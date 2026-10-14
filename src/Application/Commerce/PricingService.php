@@ -29,22 +29,18 @@ final class PricingService
         }
     }
 
+    /**
+     * Gross price for display. Catalog, cart and order lines share one
+     * formula: convert the net amount into the market currency first (a
+     * whole number of cents), then apply VAT — so the listed price is
+     * always the charged price.
+     */
     public function grossCents(int $netEuroCents, MarketContext $market): int
     {
-        if ($netEuroCents < 0) {
-            throw new DomainException('Net price must not be negative.');
-        }
-        if ($market->vatBasisPoints < 0 || $market->vatBasisPoints > self::BPS_DENOMINATOR) {
-            throw new DomainException('VAT basis points must be between 0 and 10000.');
-        }
-        $rateScaled = self::scaleRate($market->exchangeRate);
-
-        $num = self::checkedMultiply(
-            self::checkedMultiply($netEuroCents, $rateScaled),
-            self::BPS_DENOMINATOR + $market->vatBasisPoints,
+        return $this->grossFromConvertedNetCents(
+            $this->convertedNetCents($netEuroCents, $market),
+            $market,
         );
-
-        return self::roundHalfUp($num, self::RATE_SCALE * self::BPS_DENOMINATOR);
     }
 
     /**

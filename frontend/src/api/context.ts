@@ -17,6 +17,7 @@ export type ContextMarket = {
   locale: Locale;
   vat_basis_points: number;
   exchange_rate: string;
+  free_standard_threshold: number;
 };
 
 export type ContextCountry = { code: string; name: string };

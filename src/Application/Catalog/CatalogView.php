@@ -101,10 +101,12 @@ final class CatalogView
     {
         $imageUrl = $row['image_url'] ?? null;
         $compareAt = $row['compare_at_price_cents_net'] ?? null;
+        $brand = $row['brand'] ?? null;
         $card = [
             'id' => self::toInt($row['id'] ?? null),
             'slug' => self::toString($row['slug'] ?? null),
             'name' => self::toString($row['name'] ?? null),
+            'brand' => \is_string($brand) ? $brand : null,
             'image_url' => \is_string($imageUrl) ? $imageUrl : null,
             'price_cents' => $this->pricing->grossCents(self::toInt($row['price_cents_net'] ?? null), $market),
             'currency' => $market->currency,

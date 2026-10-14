@@ -8,6 +8,7 @@ import { ApiError } from '../api/client';
 import { useApp } from '../app/useApp';
 import { ProductCard } from '../components/ProductCard';
 import { ProductImage } from '../components/ProductImage';
+import { SelectShell } from '../components/forms/SelectShell';
 import { formatMoney } from '../lib/i18n/format';
 
 export function ProductPage() {
@@ -202,18 +203,20 @@ function ProductDetailView({ detail }: { detail: ProductDetailResponse }) {
               <label htmlFor="variant" className="text-sm font-semibold">
                 {t.product.variant_label}
               </label>
-              <select
-                id="variant"
-                value={selectedVariant?.id ?? ''}
-                onChange={(event) => setVariantId(Number(event.target.value))}
-                className="mt-2 w-full rounded-xl border border-dune bg-cream px-4 py-2.5 text-sm"
-              >
-                {variants.map((variant) => (
-                  <option key={variant.id} value={variant.id}>
-                    {variant.name}
-                  </option>
-                ))}
-              </select>
+              <SelectShell className="mt-2 w-full">
+                <select
+                  id="variant"
+                  value={selectedVariant?.id ?? ''}
+                  onChange={(event) => setVariantId(Number(event.target.value))}
+                  className="w-full appearance-none rounded-xl border border-dune bg-cream pl-4 pr-10 py-2.5 text-sm"
+                >
+                  {variants.map((variant) => (
+                    <option key={variant.id} value={variant.id}>
+                      {variant.name}
+                    </option>
+                  ))}
+                </select>
+              </SelectShell>
             </div>
           ) : null}
 

@@ -305,6 +305,21 @@ describe('admin order detail', () => {
     client.clear();
   });
 
+  it('renders the transition controls stacked full-width on narrow screens', async () => {
+    mockFetch({ role: 'admin' });
+    const client = renderApp('/admin/orders/5');
+
+    const select = await screen.findByLabelText('Next status');
+    expect(select).toHaveClass('appearance-none');
+    expect(select.parentElement).toHaveClass('w-full');
+    expect(select.parentElement).toHaveClass('sm:w-72');
+
+    const apply = screen.getByRole('button', { name: 'Apply' });
+    expect(apply).toHaveClass('w-full');
+    expect(apply).toHaveClass('sm:w-auto');
+    client.clear();
+  });
+
   it('surfaces an invalid transition field error', async () => {
     mockFetch({ role: 'admin', patchStatus: 422 });
     const client = renderApp('/admin/orders/5');

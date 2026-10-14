@@ -5,6 +5,7 @@ import { getCategories, getProducts } from '../api/catalog';
 import type { ProductSort } from '../api/catalog';
 import { useApp } from '../app/useApp';
 import { ProductCard } from '../components/ProductCard';
+import { SelectShell } from '../components/forms/SelectShell';
 import { format } from '../lib/i18n/dictionaries';
 
 const SORTS: ProductSort[] = ['newest', 'price_asc', 'price_desc'];
@@ -62,14 +63,14 @@ export function CatalogPage() {
 
   const categoryNodes = categories.data;
   const flatCategories = useMemo(() => {
-    const list: { slug: string; name: string; depth: number }[] = [];
-    const walk = (nodes: NonNullable<typeof categoryNodes>, depth: number) => {
+    const list: { slug: string; name: string }[] = [];
+    const walk = (nodes: NonNullable<typeof categoryNodes>) => {
       for (const node of nodes) {
-        list.push({ slug: node.slug, name: node.name, depth });
-        walk(node.children, depth + 1);
+        list.push({ slug: node.slug, name: node.name });
+        walk(node.children);
       }
     };
-    walk(categoryNodes ?? [], 0);
+    walk(categoryNodes ?? []);
 
     return list;
   }, [categoryNodes]);
@@ -131,41 +132,44 @@ export function CatalogPage() {
         <label className="sr-only" htmlFor="catalog-category">
           {t.catalog.category_label}
         </label>
-        <select
-          id="catalog-category"
-          value={category ?? ''}
-          onChange={(event) =>
-            updateParam('category', event.target.value || null)
-          }
-          className="rounded-full border border-dune bg-cream px-4 py-2 text-sm"
-        >
-          <option value="">{t.catalog.all_categories}</option>
-          {flatCategories.map((node) => (
-            <option key={node.slug} value={node.slug}>
-              {'— '.repeat(node.depth)}
-              {node.name}
-            </option>
-          ))}
-        </select>
+        <SelectShell>
+          <select
+            id="catalog-category"
+            value={category ?? ''}
+            onChange={(event) =>
+              updateParam('category', event.target.value || null)
+            }
+            className="appearance-none rounded-full border border-dune bg-cream pl-4 pr-10 py-2 text-sm"
+          >
+            <option value="">{t.catalog.all_categories}</option>
+            {flatCategories.map((node) => (
+              <option key={node.slug} value={node.slug}>
+                {node.name}
+              </option>
+            ))}
+          </select>
+        </SelectShell>
 
         <label className="sr-only" htmlFor="catalog-sort">
           {t.catalog.sort_label}
         </label>
-        <select
-          id="catalog-sort"
-          value={sort ?? 'newest'}
-          onChange={(event) =>
-            updateParam(
-              'sort',
-              event.target.value === 'newest' ? null : event.target.value,
-            )
-          }
-          className="rounded-full border border-dune bg-cream px-4 py-2 text-sm"
-        >
-          <option value="newest">{t.catalog.sort_newest}</option>
-          <option value="price_asc">{t.catalog.sort_price_asc}</option>
-          <option value="price_desc">{t.catalog.sort_price_desc}</option>
-        </select>
+        <SelectShell>
+          <select
+            id="catalog-sort"
+            value={sort ?? 'newest'}
+            onChange={(event) =>
+              updateParam(
+                'sort',
+                event.target.value === 'newest' ? null : event.target.value,
+              )
+            }
+            className="appearance-none rounded-full border border-dune bg-cream pl-4 pr-10 py-2 text-sm"
+          >
+            <option value="newest">{t.catalog.sort_newest}</option>
+            <option value="price_asc">{t.catalog.sort_price_asc}</option>
+            <option value="price_desc">{t.catalog.sort_price_desc}</option>
+          </select>
+        </SelectShell>
       </div>
 
       {products.isPending ? (

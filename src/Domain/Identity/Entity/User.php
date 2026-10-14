@@ -9,13 +9,14 @@ use App\Domain\Identity\Repository\UserRepository;
 use App\Domain\Identity\UserRole;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Security\Core\User\EquatableInterface;
 use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 
 #[ORM\Entity(repositoryClass: UserRepository::class)]
 #[ORM\Table(name: 'users')]
 #[ORM\UniqueConstraint(name: 'users_remember_token_unique', columns: ['remember_token'])]
-class User implements UserInterface, PasswordAuthenticatedUserInterface
+class User implements UserInterface, PasswordAuthenticatedUserInterface, EquatableInterface
 {
     #[ORM\Id]
     #[ORM\GeneratedValue(strategy: 'IDENTITY')]
@@ -37,6 +38,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     #[ORM\Column(name: 'email_verified_at', type: Types::DATETIMETZ_IMMUTABLE, nullable: true)]
     private ?\DateTimeImmutable $emailVerifiedAt = null;
+
+    #[ORM\Column(name: 'email_verification_nonce', length: 32, nullable: true)]
+    private ?string $emailVerificationNonce = null;
 
     #[ORM\Column(name: 'remember_token', length: 100, nullable: true)]
     private ?string $rememberToken = null;
@@ -107,6 +111,27 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     {
     }
 
+    /**
+     * Session-refresh comparison used by the context listener: once this
+     * returns false — identifier, role or password hash changed — the
+     * stored security token is discarded, so a password change kills every
+     * other session for the account.
+     */
+    public function isEqualTo(UserInterface $user): bool
+    {
+        if ($this->getUserIdentifier() !== $user->getUserIdentifier()) {
+            return false;
+        }
+        if ($this->getRoles() !== $user->getRoles()) {
+            return false;
+        }
+        if ($user instanceof PasswordAuthenticatedUserInterface && $this->getPassword() !== $user->getPassword()) {
+            return false;
+        }
+
+        return true;
+    }
+
     public function isEmailVerified(): bool
     {
         return null !== $this->emailVerifiedAt;
@@ -120,7 +145,25 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function verifyEmail(\DateTimeImmutable $at): void
     {
         $this->emailVerifiedAt ??= $at;
+        // Consuming a link burns it: a fresh nonce invalidates every
+        // outstanding verification URL, including the one just used.
+        $this->mintEmailVerificationNonce();
         $this->updatedAt = $this->now();
+    }
+
+    /**
+     * Single-use secret bound into verification-link signatures. Null only
+     * until the first link is issued — the signer mints it on demand.
+     */
+    public function getEmailVerificationNonce(): ?string
+    {
+        return $this->emailVerificationNonce;
+    }
+
+    /** Mints and stores a fresh nonce, retiring the previous one. */
+    public function mintEmailVerificationNonce(): string
+    {
+        return $this->emailVerificationNonce = bin2hex(random_bytes(16));
     }
 
     public function unverifyEmail(): void
@@ -142,6 +185,8 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function changePassword(string $hash): void
     {
         $this->passwordHash = $hash;
+        // Outstanding remember-me material must die with the old password.
+        $this->rememberToken = null;
         $this->updatedAt = $this->now();
     }
 

@@ -36,7 +36,7 @@ describe('API client', () => {
 
     await expect(getJson('/health/live')).rejects.toMatchObject({
       code: 'internal_error',
-      message: 'Сервис временно недоступен.',
+      message: 'The service is temporarily unavailable.',
       status: 503,
       retryable: true,
     });
@@ -74,7 +74,7 @@ describe('API client', () => {
 
     await expect(getJson('/health/live')).rejects.toMatchObject({
       code: 'network_error',
-      message: 'Нет соединения с API.',
+      message: 'Could not reach the API.',
       retryable: true,
     });
   });

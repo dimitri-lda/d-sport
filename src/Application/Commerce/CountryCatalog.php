@@ -34,6 +34,12 @@ final class CountryCatalog
         $country = strtoupper($country);
         $default = strtoupper($this->defaultCountry);
         if (!$this->isSupported($default)) {
+            // A misconfigured default falls back to 'DE' — but only when
+            // 'DE' itself is configured; otherwise fail loudly instead of
+            // hitting an undefined-array-key on the VAT map below.
+            if (!$this->isSupported('DE')) {
+                throw new \RuntimeException(sprintf('Commerce misconfiguration: neither the default country "%s" nor the "DE" fallback is configured.', $default));
+            }
             $default = 'DE';
         }
         if (!$this->isSupported($country)) {

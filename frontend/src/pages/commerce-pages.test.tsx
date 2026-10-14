@@ -32,6 +32,7 @@ function contextPayload(loggedIn: 'guest' | 'verified' | 'unverified') {
         locale: 'en',
         vat_basis_points: 1900,
         exchange_rate: '1.00000000',
+        free_standard_threshold: 5000,
       },
       countries: [{ code: 'DE', name: 'Germany' }],
       locales: ['en', 'ru', 'pl'],

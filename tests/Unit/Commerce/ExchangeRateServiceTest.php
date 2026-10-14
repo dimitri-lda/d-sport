@@ -232,4 +232,86 @@ final class ExchangeRateServiceTest extends TestCase
         self::assertSame($stored, $service->rate('PLN', self::now()));
         self::assertSame(['read', 'write'], $operations, 'Each operation warns once, in order.');
     }
+
+    public function testStaleFallbackIsLoggedWithCurrencyAndAge(): void
+    {
+        $stored = self::stored(quotedAt: '2026-02-01T05:00:00+00:00'); // 7h old
+        $fetcher = $this->createMock(ExchangeRateFetcher::class);
+        $fetcher->method('fetch')->willThrowException(new ExchangeRateUnavailable('all sources down'));
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->expects(self::once())->method('warning')
+            ->with(
+                'Serving a stale exchange-rate quote after a fetch failure.',
+                self::callback(static fn (array $context): bool => 'PLN' === $context['currency'] && 7 === $context['age_hours']),
+            );
+
+        $service = $this->service($this->store($stored), $fetcher, logger: $logger);
+
+        self::assertSame($stored, $service->rate('PLN', self::now()));
+    }
+
+    public function testStaleQuoteBeyondMaxStaleIsUnavailable(): void
+    {
+        // ~12 days old: past the 7-day stale ceiling, so a source outage can
+        // no longer resurrect it.
+        $stored = self::stored(quotedAt: '2026-01-20T00:00:00+00:00');
+        $store = $this->createMock(ExchangeRateStore::class);
+        $store->expects(self::never())->method('save');
+        $store->method('find')->willReturn($stored);
+        $fetcher = $this->createMock(ExchangeRateFetcher::class);
+        $fetcher->method('fetch')->willThrowException(new ExchangeRateUnavailable('down'));
+
+        $this->expectException(ExchangeRateUnavailable::class);
+        $this->service($store, $fetcher)->rate('PLN', self::now());
+    }
+
+    public function testImplausibleJumpIsRejectedWhileStoredQuoteIsUsable(): void
+    {
+        // Stored quote is stale (>6h) but inside MAX_STALE: it stays the
+        // plausibility baseline, so a +28% fetched rate is rejected.
+        $stored = self::stored('4.28000000', quotedAt: '2026-02-01T05:00:00+00:00');
+        $fresh = new ExchangeRate('PLN', '5.50000000', 'nbp', self::now());
+        $store = $this->createMock(ExchangeRateStore::class);
+        $store->method('find')->willReturn($stored);
+        $store->expects(self::never())->method('save');
+
+        $rate = $this->service($store, $this->fetcher([$fresh]))->rate('PLN', self::now());
+
+        self::assertSame($stored, $rate, 'A >20% jump must keep the stored quote.');
+    }
+
+    public function testImplausibleJumpIsAcceptedOnceStoredQuoteIsTooOld(): void
+    {
+        // Beyond MAX_STALE the stored quote is no baseline: the same +28%
+        // move is a legitimate market move and is persisted.
+        $stored = self::stored('4.28000000', quotedAt: '2026-01-20T00:00:00+00:00');
+        $fresh = new ExchangeRate('PLN', '5.50000000', 'nbp', self::now());
+        $store = $this->createMock(ExchangeRateStore::class);
+        $store->method('find')->willReturn($stored);
+        $store->expects(self::once())->method('save')->with($fresh);
+
+        $rate = $this->service($store, $this->fetcher([$fresh]))->rate('PLN', self::now());
+
+        self::assertSame('5.50000000', $rate->rate);
+    }
+
+    public function testMalformedCacheEntryIsIgnored(): void
+    {
+        // Missing quoted_at would parse as "now" and look fresh — it must
+        // be ignored so the stored quote wins instead.
+        $item = $this->createMock(CacheItemInterface::class);
+        $item->method('isHit')->willReturn(true);
+        $item->method('get')->willReturn([
+            'currency' => 'PLN',
+            'rate' => '4.20000000',
+            'source' => 'redis',
+        ]);
+        $cache = $this->createMock(CacheItemPoolInterface::class);
+        $cache->method('getItem')->willReturn($item);
+
+        $stored = self::stored('4.28000000', quotedAt: '2026-02-01T09:00:00+00:00');
+        $rate = $this->service($this->store($stored), $this->fetcher([]), $cache)->rate('PLN', self::now());
+
+        self::assertSame('4.28000000', $rate->rate, 'A corrupt cache entry must not beat the stored quote.');
+    }
 }

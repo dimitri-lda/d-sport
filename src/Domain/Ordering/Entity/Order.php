@@ -19,6 +19,7 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Table(name: 'orders')]
 #[ORM\Index(name: 'orders_status_idx', columns: ['status', 'created_at'])]
 #[ORM\Index(name: 'orders_user_history_idx', columns: ['user_id', 'created_at'])]
+#[ORM\Index(name: 'orders_created_idx', columns: ['created_at', 'id'])]
 #[ORM\UniqueConstraint(name: 'orders_number_unique', columns: ['number'])]
 class Order
 {

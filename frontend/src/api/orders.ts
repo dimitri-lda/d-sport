@@ -83,7 +83,9 @@ export async function placeOrder(
 ): Promise<{ id: number; number: string }> {
   const payload = await request<{ data: { id: number; number: string } }>(
     '/v1/orders',
-    { method: 'POST', body: input, csrfToken },
+    // Checkout holds row locks and can legitimately wait behind another
+    // checkout — far more headroom than the ordinary request default.
+    { method: 'POST', body: input, csrfToken, timeoutMs: 20_000 },
   );
 
   return payload.data;

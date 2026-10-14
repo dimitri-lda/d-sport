@@ -14,7 +14,8 @@ use Doctrine\ORM\EntityManagerInterface;
 /**
  * Admin status transitions. One transaction: the fresh order row is locked
  * pessimistically, the transition validated, inventory released exactly once
- * on cancellation (never on refund), then status and stock flush together.
+ * when the goods never left the warehouse (cancellation, or a refund from
+ * paid), then status and stock flush together.
  */
 final class AdminOrderTransition
 {
@@ -28,7 +29,7 @@ final class AdminOrderTransition
     /** @return array{status: string, next_statuses: list<string>} */
     public function transition(int $orderId, OrderStatus $next, \DateTimeImmutable $at): array
     {
-        $view = $this->entityManager->wrapInTransaction(
+        $result = $this->entityManager->wrapInTransaction(
             function (EntityManagerInterface $em) use ($orderId, $next, $at): array {
                 $order = $em->find(Order::class, $orderId);
                 if (!$order instanceof Order) {
@@ -42,23 +43,28 @@ final class AdminOrderTransition
                 if (!$order->getStatus()->canTransitionTo($next)) {
                     throw new ApiProblem('invalid_status_transition', 'The order cannot move to that status.', 422, ['status' => ['The requested status transition is not allowed.']]);
                 }
-                if (OrderStatus::Cancelled === $next) {
+                // Release stock only when the goods never left the
+                // warehouse: cancellation pre-fulfilment, or a refund
+                // straight from paid. Shipped/delivered refunds keep it.
+                $released = OrderStatus::Cancelled === $next
+                    || (OrderStatus::Refunded === $next && OrderStatus::Paid === $order->getStatus());
+                if ($released) {
                     $this->inventoryRelease->releaseLocked($em, $order, $at);
                 }
                 $order->transitionTo($next, $at);
                 $em->flush();
 
-                return self::view($order);
+                return ['view' => self::view($order), 'released' => $released];
             },
         );
 
-        if (OrderStatus::Cancelled === $next) {
+        if ($result['released']) {
             // The release committed with the transition; invalidate after
             // the commit, never inside — a rolled-back attempt must not fire.
             $this->catalogCache->productsChanged();
         }
 
-        return $view;
+        return $result['view'];
     }
 
     /** @return array{status: string, next_statuses: list<string>} */

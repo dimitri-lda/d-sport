@@ -6,6 +6,7 @@ import { getAdminOrder, updateAdminOrderStatus } from '../../api/admin';
 import type { Order } from '../../api/orders';
 import { useApp } from '../../app/useApp';
 import { FormError } from '../../components/forms/FormError';
+import { SelectShell } from '../../components/forms/SelectShell';
 import { format } from '../../lib/i18n/dictionaries';
 import { formatMoney } from '../../lib/i18n/format';
 import { toSubmissionError } from '../../lib/forms';
@@ -141,27 +142,30 @@ function AdminOrderView({
         </h2>
         <FormError message={error} />
         <div className="mt-3 flex flex-wrap items-center gap-3">
-          <select
-            aria-label={t.admin.transition_select}
-            value={selected}
-            onChange={(event) => setSelected(event.target.value)}
-            className="rounded-md border border-dune bg-white px-3 py-2 text-sm
-              text-ink outline-none focus:border-cobalt focus:ring-2
-              focus:ring-cobalt/30"
-          >
-            <option value="">{t.admin.transition_placeholder}</option>
-            {nextStatuses.map((status) => (
-              <option key={status} value={status}>
-                {t.orders.statuses[status] ?? status}
-              </option>
-            ))}
-          </select>
+          <SelectShell className="w-full sm:w-72">
+            <select
+              aria-label={t.admin.transition_select}
+              value={selected}
+              onChange={(event) => setSelected(event.target.value)}
+              className="h-10 w-full appearance-none rounded-md border
+                border-dune bg-white pl-3 pr-10 text-sm text-ink
+                transition-colors focus-visible:outline-2
+                focus-visible:outline-offset-2 focus-visible:outline-cobalt"
+            >
+              <option value="">{t.admin.transition_placeholder}</option>
+              {nextStatuses.map((status) => (
+                <option key={status} value={status}>
+                  {t.orders.statuses[status] ?? status}
+                </option>
+              ))}
+            </select>
+          </SelectShell>
           <button
             type="button"
             disabled={selected === '' || transition.isPending}
             onClick={() => transition.mutate(selected)}
-            className="rounded-full bg-cobalt px-5 py-2 text-sm font-semibold
-              text-cream disabled:opacity-40"
+            className="h-10 w-full rounded-full bg-cobalt px-5 text-sm
+              font-semibold text-cream disabled:opacity-40 sm:w-auto"
           >
             {transition.isPending ? t.common.loading : t.admin.transition_apply}
           </button>

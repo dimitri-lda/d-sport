@@ -11,6 +11,7 @@ use App\Domain\Identity\Entity\User;
 use App\Presentation\Http\ApiProblem;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\Persistence\ManagerRegistry;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Session\SessionInterface;
@@ -22,7 +23,7 @@ use Symfony\Component\Uid\Uuid;
  * mismatches and missing lines always surface as a generic 404 so neither
  * cart nor item ids leak across ownership boundaries.
  */
-final class CartManager
+class CartManager
 {
     public const SESSION_KEY = 'cart_token';
 
@@ -32,6 +33,7 @@ final class CartManager
         private readonly CartRepository $carts,
         private readonly ProductVariantRepository $variants,
         private readonly EntityManagerInterface $entityManager,
+        private readonly ManagerRegistry $registry,
         private readonly Security $security,
     ) {
     }
@@ -124,7 +126,9 @@ final class CartManager
      * Login/register merge: every guest line overwrites the user cart's line
      * for that variant (never sums), capped by current stock and the max
      * quantity. Lines whose variant has no stock left are dropped. The guest
-     * cart and the session token are removed in the same transaction.
+     * cart row is removed inside the transaction; the session token is only
+     * forgotten once the merge has committed, so a rollback keeps the guest
+     * cart reachable.
      */
     public function mergeGuestIntoUser(SessionInterface $session, User $user): void
     {
@@ -134,7 +138,7 @@ final class CartManager
         }
         $guest = $this->carts->findForGuestToken($token);
 
-        $this->entityManager->wrapInTransaction(function (EntityManagerInterface $em) use ($guest, $user, $session): void {
+        $this->entityManager->wrapInTransaction(function (EntityManagerInterface $em) use ($guest, $user): void {
             $target = $this->carts->findForUser($user);
             if (null === $target) {
                 $target = Cart::forUser($user);
@@ -152,8 +156,8 @@ final class CartManager
                 $em->remove($guest);
             }
             $em->flush();
-            $session->remove(self::SESSION_KEY);
         });
+        $session->remove(self::SESSION_KEY);
     }
 
     private function create(Cart $cart, ?User $user, ?string $token): Cart
@@ -163,7 +167,9 @@ final class CartManager
             $this->entityManager->flush();
         } catch (UniqueConstraintViolationException) {
             // A concurrent request won the create race; reload the winner.
-            $this->entityManager->clear();
+            // The failed flush closed the manager — reset it (as PlaceOrder
+            // does on its retry path) or the next flush() would throw.
+            $this->registry->resetManager();
             $cart = null !== $user
                 ? $this->carts->findForUser($user)
                 : (null !== $token ? $this->carts->findForGuestToken($token) : null);
