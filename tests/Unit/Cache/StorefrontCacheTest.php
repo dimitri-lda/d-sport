@@ -237,7 +237,7 @@ final class StorefrontCacheTest extends TestCase
         $loader = static fn (): string => 'loaded';
         $cache->remember('list', 'other', $loader);
         $generation = $this->pools['list']->getItem('generation')->get();
-        $fullKey = 'sf.list.'.$generation.'.'.hash('sha256', 'contended');
+        $fullKey = 'sf.list.v2.'.$generation.'.'.hash('sha256', 'contended');
         $holder = $locks->createLock('storefront.'.$fullKey, 30);
         self::assertTrue($holder->acquire());
 

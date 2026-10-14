@@ -397,6 +397,18 @@ final class IdentityFlowTest extends WebTestCase
         );
     }
 
+    public function testContextExposesTheMarketFreeDeliveryThreshold(): void
+    {
+        $client = self::createClient();
+        $client->request('GET', '/api/v1/context');
+        self::assertResponseStatusCodeSame(200);
+        $market = self::payload($client)['data']['market'] ?? null;
+        self::assertIsArray($market);
+        // EUR markets price at the configured €50 gross threshold directly.
+        self::assertSame('EUR', $market['currency']);
+        self::assertSame(5000, $market['free_standard_threshold']);
+    }
+
     public function testResendVerificationIsThrottled(): void
     {
         $client = self::createClient();

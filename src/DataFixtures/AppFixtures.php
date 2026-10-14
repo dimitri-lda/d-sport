@@ -528,6 +528,6 @@ final class AppFixtures extends Fixture
 
     private function image(string $kind, string $slug): string
     {
-        return '/fixtures/images/'.$kind.'/'.$slug.'.svg';
+        return '/fixtures/images/'.$kind.'/'.$slug.'.webp';
     }
 }

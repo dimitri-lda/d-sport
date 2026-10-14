@@ -14,6 +14,9 @@ const en = {
     orders: 'Orders',
     verified: 'Verified',
     unverified: 'Unverified',
+    trust_delivery: 'Free standard delivery over {amount}',
+    trust_express: 'Express delivery available',
+    trust_vat: 'All prices include VAT',
   },
   auth: {
     login_title: 'Welcome back',
@@ -284,6 +287,9 @@ const ru: Dictionary = {
     orders: 'Заказы',
     verified: 'Подтверждён',
     unverified: 'Не подтверждён',
+    trust_delivery: 'Бесплатная стандартная доставка от {amount}',
+    trust_express: 'Доступна экспресс-доставка',
+    trust_vat: 'Все цены включают НДС',
   },
   auth: {
     login_title: 'С возвращением',
@@ -552,6 +558,9 @@ const pl: Dictionary = {
     orders: 'Zamówienia',
     verified: 'Zweryfikowany',
     unverified: 'Niezweryfikowany',
+    trust_delivery: 'Darmowa dostawa standardowa od {amount}',
+    trust_express: 'Dostępna dostawa ekspresowa',
+    trust_vat: 'Wszystkie ceny zawierają VAT',
   },
   auth: {
     login_title: 'Witaj ponownie',

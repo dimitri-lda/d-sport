@@ -3,6 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router';
 import { CART_QUERY_KEY, getCart } from '../api/cart';
 import { useApp } from '../app/useApp';
+import { format } from '../lib/i18n/dictionaries';
+import { formatMoney } from '../lib/i18n/format';
 import { MarketSwitcher } from './MarketSwitcher';
 import { BackendStatus } from './BackendStatus';
 
@@ -16,7 +18,8 @@ function navLinkClass({ isActive }: { isActive: boolean }): string {
 }
 
 export function StoreLayout() {
-  const { t, ready, failed, retryContext, user, signOut } = useApp();
+  const { t, ready, failed, retryContext, user, market, locale, signOut } =
+    useApp();
   const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
   const cart = useQuery({
@@ -119,6 +122,32 @@ export function StoreLayout() {
       >
         {t.nav.skip_to_content}
       </a>
+
+      <div className="hidden border-b border-dune/60 bg-ink text-cream/70 sm:block">
+        <ul className="mx-auto flex max-w-6xl items-center justify-center gap-8 px-4 py-1.5 text-xs sm:px-6">
+          {market === null ? null : (
+            <>
+              <li>
+                {format(t.nav.trust_delivery, {
+                  amount: formatMoney(
+                    market.free_standard_threshold,
+                    market.currency,
+                    locale,
+                  ),
+                })}
+              </li>
+              <li aria-hidden="true" className="text-cream/30">
+                ·
+              </li>
+            </>
+          )}
+          <li>{t.nav.trust_express}</li>
+          <li aria-hidden="true" className="text-cream/30">
+            ·
+          </li>
+          <li>{t.nav.trust_vat}</li>
+        </ul>
+      </div>
 
       <header className="sticky top-0 z-40 border-b border-dune/70 bg-cream/85 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3 sm:px-6">

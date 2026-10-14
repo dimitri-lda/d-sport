@@ -28,6 +28,11 @@ export function ProductCard({
         />
       </div>
       <div className="p-4">
+        {product.brand !== null ? (
+          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-mute">
+            {product.brand}
+          </p>
+        ) : null}
         <h3 className="font-display text-base font-semibold leading-snug">
           {product.name}
         </h3>

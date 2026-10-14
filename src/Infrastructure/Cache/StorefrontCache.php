@@ -26,6 +26,12 @@ use Symfony\Component\Messenger\MessageBusInterface;
 final class StorefrontCache
 {
     private const GROUPS = ['tree', 'list', 'card'];
+    /**
+     * Part of every entry key: bump when a cached payload's shape changes so
+     * entries written by an older release are orphaned at deploy time rather
+     * than read back missing the new fields.
+     */
+    private const PAYLOAD_VERSION = 2;
     private const GENERATION_KEY = 'generation';
     private const REFRESH_DEBOUNCE_SECONDS = 60;
     private const WARN_INTERVAL_SECONDS = 300;
@@ -140,6 +146,7 @@ final class StorefrontCache
         return implode('.', [
             $this->prefix,
             $group,
+            'v'.self::PAYLOAD_VERSION,
             $generation,
             hash('sha256', $logicalKey),
         ]);
