@@ -128,6 +128,34 @@ function mockFetch(
         }),
       );
     }
+    if (url.startsWith('/api/v1/categories')) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            data: [
+              {
+                id: 1,
+                slug: 'footwear',
+                name: 'Footwear',
+                image_url: null,
+                product_count: 4,
+                children: [
+                  {
+                    id: 2,
+                    slug: 'running',
+                    name: 'Running',
+                    image_url: null,
+                    product_count: 2,
+                    children: [],
+                  },
+                ],
+              },
+            ],
+          }),
+          { headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+    }
     if (url.startsWith('/api/v1/store/home')) {
       return Promise.resolve(
         new Response(JSON.stringify(homePayload), {
@@ -264,6 +292,17 @@ it('navigates from home to the catalog page', async () => {
   const requested = fetch.mock.calls.map((call) => String(call[0]));
   expect(requested.some((url) => url.startsWith('/api/v1/products'))).toBe(
     true,
+  );
+
+  const categorySelect = await screen.findByRole('combobox', {
+    name: 'Category',
+  });
+  expect(categorySelect).toHaveClass('appearance-none');
+  for (const option of categorySelect.querySelectorAll('option')) {
+    expect(option.textContent).not.toMatch(/^\s*[—–-]/);
+  }
+  expect(screen.getByRole('combobox', { name: 'Sort' })).toHaveClass(
+    'appearance-none',
   );
   client.clear();
 });

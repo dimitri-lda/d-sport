@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router';
 import { getAdminOrders } from '../../api/admin';
 import type { AdminOrdersFilters } from '../../api/admin';
 import { useApp } from '../../app/useApp';
+import { SelectShell } from '../../components/forms/SelectShell';
 import { format } from '../../lib/i18n/dictionaries';
 import { formatMoney } from '../../lib/i18n/format';
 
@@ -90,18 +91,23 @@ export function AdminOrdersPage() {
         </label>
         <label className="flex flex-col gap-1 text-xs font-medium text-ink-mute">
           {t.admin.filter_status}
-          <select
-            value={filters.status}
-            onChange={(event) => setFilter('status', event.target.value)}
-            className={inputClass}
-          >
-            <option value="">{t.admin.filter_status_all}</option>
-            {(orders.data?.statuses ?? []).map((status) => (
-              <option key={status} value={status}>
-                {t.orders.statuses[status] ?? status}
-              </option>
-            ))}
-          </select>
+          <SelectShell>
+            <select
+              value={filters.status}
+              onChange={(event) => setFilter('status', event.target.value)}
+              className="w-full appearance-none rounded-md border border-dune
+                bg-white pl-3 pr-10 py-2 text-sm text-ink outline-none
+                transition-colors focus:border-cobalt focus:ring-2
+                focus:ring-cobalt/30"
+            >
+              <option value="">{t.admin.filter_status_all}</option>
+              {(orders.data?.statuses ?? []).map((status) => (
+                <option key={status} value={status}>
+                  {t.orders.statuses[status] ?? status}
+                </option>
+              ))}
+            </select>
+          </SelectShell>
         </label>
         <label className="flex flex-col gap-1 text-xs font-medium text-ink-mute">
           {t.admin.filter_from}
