@@ -7,6 +7,7 @@ namespace App\Presentation\Http\Security;
 use App\Application\Cart\CartManager;
 use App\Domain\Identity\Entity\User;
 use App\Presentation\Http\Api\ContextView;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -24,6 +25,7 @@ final class LoginSuccessHandler implements AuthenticationSuccessHandlerInterface
     public function __construct(
         private readonly ContextView $contextView,
         private readonly CartManager $cartManager,
+        private readonly LoggerInterface $logger,
     ) {
     }
 
@@ -31,7 +33,16 @@ final class LoginSuccessHandler implements AuthenticationSuccessHandlerInterface
     {
         $user = $token->getUser();
         if ($user instanceof User && $request->hasSession()) {
-            $this->cartManager->mergeGuestIntoUser($request->getSession(), $user);
+            try {
+                $this->cartManager->mergeGuestIntoUser($request->getSession(), $user);
+            } catch (\Throwable $exception) {
+                // The merge is best-effort: losing the guest cart is a far
+                // smaller harm than a broken cart blocking authentication.
+                $this->logger->warning('Guest cart merge failed during login.', [
+                    'user_id' => $user->getId(),
+                    'exception' => $exception::class,
+                ]);
+            }
         }
 
         // The session-fixation strategy runs after this handler and clears

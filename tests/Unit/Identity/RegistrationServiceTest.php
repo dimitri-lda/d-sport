@@ -46,7 +46,7 @@ final class RegistrationServiceTest extends TestCase
             $this->users,
             $this->hasher,
             $this->em,
-            new VerificationLinkSigner('https://shop.example.test', 'test-secret'),
+            new VerificationLinkSigner('https://shop.example.test', 'test-secret', $this->em),
             new AccountMailer($this->mailer, $this->logger, 'Sport E <no-reply@sport-e.example>'),
         );
         $this->now = new \DateTimeImmutable('2026-02-01T12:00:00+00:00');
@@ -68,7 +68,9 @@ final class RegistrationServiceTest extends TestCase
         $this->users->method('findByEmail')->willReturn(null);
         $this->hasher->method('hashPassword')->willReturn('bcrypt-hash');
         $this->em->expects(self::once())->method('persist')->with(self::isInstanceOf(User::class));
-        $this->em->expects(self::once())->method('flush');
+        // Flushed once for the user row and once when the verification
+        // signer mints the nonce.
+        $this->em->expects(self::exactly(2))->method('flush');
 
         $user = $this->service->register(self::input(['email' => '  Mixed@Example.TEST  ']), $this->now);
 

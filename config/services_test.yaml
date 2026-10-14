@@ -16,3 +16,10 @@ services:
 
     App\Application\Commerce\ExchangeRateFetcher:
         alias: App\Tests\Double\FakeExchangeRateFetcher
+
+    App\Tests\Double\FailingCartManager:
+        autowire: true
+        autoconfigure: false
+
+    App\Application\Cart\CartManager:
+        alias: App\Tests\Double\FailingCartManager

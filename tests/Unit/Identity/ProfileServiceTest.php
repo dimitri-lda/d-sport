@@ -44,7 +44,7 @@ final class ProfileServiceTest extends TestCase
             $this->addresses,
             $hasher,
             new AccountMailer($this->mailer, new NullLogger(), 'Sport E <no-reply@sport-e.example>'),
-            new VerificationLinkSigner('https://shop.example.test', 'test-secret'),
+            new VerificationLinkSigner('https://shop.example.test', 'test-secret', $this->em),
             $this->em,
             new CountryCatalog(
                 ['PL' => ['code' => 'pl_pl', 'currency' => 'PLN', 'locale' => 'pl', 'vat_basis_points' => 2300]],

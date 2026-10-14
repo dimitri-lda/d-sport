@@ -8,10 +8,12 @@ use App\Application\Identity\VerificationLinkSigner;
 use App\Domain\Identity\Entity\PasswordResetToken;
 use App\Domain\Identity\Entity\User;
 use App\Domain\Identity\Repository\UserRepository;
+use App\Tests\Double\FailingCartManager;
 use App\Tests\Support\FlushesRedis;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 
 /**
@@ -343,6 +345,34 @@ final class IdentityFlowTest extends WebTestCase
         self::assertResponseStatusCodeSame(302);
         self::assertSame('/verify-email?verified=1', $client->getResponse()->headers->get('Location'));
         self::assertTrue(self::userByEmail($email)->isEmailVerified());
+
+        // The link is single-use: the nonce rotated on success, so the
+        // replayed URL fails even though nothing about it changed.
+        $client->request('GET', $path);
+        self::assertResponseStatusCodeSame(403);
+        self::assertSame('verification_link_invalid', self::payload($client)['error']['code']);
+    }
+
+    public function testLoginSucceedsWhenTheGuestCartMergeFails(): void
+    {
+        $client = self::createClient();
+        $email = uniqid('mergefail', true).'@example.test';
+        $em = self::em();
+        $hasher = self::getContainer()->get(UserPasswordHasherInterface::class);
+        \assert($hasher instanceof UserPasswordHasherInterface);
+        $user = new User($email, 'pending', 'Merge Fail');
+        $user->changePassword($hasher->hashPassword($user, self::PASSWORD));
+        $em->persist($user);
+        $em->flush();
+
+        // The guest-cart merge on the login path is armed to throw:
+        // authentication itself must still succeed.
+        FailingCartManager::failNextMerge();
+        self::login($client, $email, self::PASSWORD);
+        self::assertResponseStatusCodeSame(200);
+
+        $client->request('GET', '/api/v1/context');
+        self::assertSame($email, self::payload($client)['data']['user']['email']);
     }
 
     public function testUnauthenticatedRequestsGetJson401NotRedirect(): void

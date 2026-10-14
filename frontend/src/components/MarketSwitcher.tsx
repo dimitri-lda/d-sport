@@ -50,6 +50,8 @@ function MarketSwitcherForm() {
   return (
     <form
       onSubmit={(event) => void apply(event)}
+      // Load-bearing: the basis-full error line needs a wrapping
+      // container on sm+ to land on its own row below the controls.
       className={`flex flex-wrap items-center gap-2 ${
         failed ? 'sm:flex-wrap' : 'sm:flex-nowrap'
       }`}

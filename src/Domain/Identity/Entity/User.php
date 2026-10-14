@@ -39,6 +39,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface, Equatab
     #[ORM\Column(name: 'email_verified_at', type: Types::DATETIMETZ_IMMUTABLE, nullable: true)]
     private ?\DateTimeImmutable $emailVerifiedAt = null;
 
+    #[ORM\Column(name: 'email_verification_nonce', length: 32, nullable: true)]
+    private ?string $emailVerificationNonce = null;
+
     #[ORM\Column(name: 'remember_token', length: 100, nullable: true)]
     private ?string $rememberToken = null;
 
@@ -142,7 +145,25 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface, Equatab
     public function verifyEmail(\DateTimeImmutable $at): void
     {
         $this->emailVerifiedAt ??= $at;
+        // Consuming a link burns it: a fresh nonce invalidates every
+        // outstanding verification URL, including the one just used.
+        $this->mintEmailVerificationNonce();
         $this->updatedAt = $this->now();
+    }
+
+    /**
+     * Single-use secret bound into verification-link signatures. Null only
+     * until the first link is issued — the signer mints it on demand.
+     */
+    public function getEmailVerificationNonce(): ?string
+    {
+        return $this->emailVerificationNonce;
+    }
+
+    /** Mints and stores a fresh nonce, retiring the previous one. */
+    public function mintEmailVerificationNonce(): string
+    {
+        return $this->emailVerificationNonce = bin2hex(random_bytes(16));
     }
 
     public function unverifyEmail(): void

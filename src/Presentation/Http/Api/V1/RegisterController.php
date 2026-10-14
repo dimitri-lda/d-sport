@@ -11,6 +11,7 @@ use App\EventSubscriber\ApiCsrfSubscriber;
 use App\Presentation\Http\Api\ContextView;
 use App\Presentation\Http\ApiProblem;
 use App\Presentation\Http\JsonBody;
+use Psr\Log\LoggerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -27,6 +28,7 @@ final class RegisterController
         private readonly ContextView $contextView,
         private readonly CsrfTokenManagerInterface $csrfTokenManager,
         private readonly CartManager $cartManager,
+        private readonly LoggerInterface $logger,
         #[Autowire(service: 'limiter.registration')]
         private readonly RateLimiterFactory $registrationLimiter,
     ) {
@@ -54,9 +56,18 @@ final class RegisterController
         // Authenticate through the api firewall: its login success path
         // migrates the session id (fixation protection).
         $this->security->login($user, 'security.authenticator.json_login.api', 'api');
-        // Guest lines merge into the new account's cart (overwrite semantics).
+        // Guest lines merge into the new account's cart (overwrite
+        // semantics). Best-effort, as on login: a broken guest cart must
+        // not turn a successful registration into an error response.
         if ($request->hasSession()) {
-            $this->cartManager->mergeGuestIntoUser($request->getSession(), $user);
+            try {
+                $this->cartManager->mergeGuestIntoUser($request->getSession(), $user);
+            } catch (\Throwable $exception) {
+                $this->logger->warning('Guest cart merge failed during registration.', [
+                    'user_id' => $user->getId(),
+                    'exception' => $exception::class,
+                ]);
+            }
         }
         // Fresh token for the rotated session, returned inside the context.
         $this->csrfTokenManager->refreshToken(ApiCsrfSubscriber::TOKEN_ID);

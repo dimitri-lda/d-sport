@@ -23,7 +23,7 @@ use Symfony\Component\Uid\Uuid;
  * mismatches and missing lines always surface as a generic 404 so neither
  * cart nor item ids leak across ownership boundaries.
  */
-final class CartManager
+class CartManager
 {
     public const SESSION_KEY = 'cart_token';
 
@@ -126,7 +126,9 @@ final class CartManager
      * Login/register merge: every guest line overwrites the user cart's line
      * for that variant (never sums), capped by current stock and the max
      * quantity. Lines whose variant has no stock left are dropped. The guest
-     * cart and the session token are removed in the same transaction.
+     * cart row is removed inside the transaction; the session token is only
+     * forgotten once the merge has committed, so a rollback keeps the guest
+     * cart reachable.
      */
     public function mergeGuestIntoUser(SessionInterface $session, User $user): void
     {
@@ -136,7 +138,7 @@ final class CartManager
         }
         $guest = $this->carts->findForGuestToken($token);
 
-        $this->entityManager->wrapInTransaction(function (EntityManagerInterface $em) use ($guest, $user, $session): void {
+        $this->entityManager->wrapInTransaction(function (EntityManagerInterface $em) use ($guest, $user): void {
             $target = $this->carts->findForUser($user);
             if (null === $target) {
                 $target = Cart::forUser($user);
@@ -154,8 +156,8 @@ final class CartManager
                 $em->remove($guest);
             }
             $em->flush();
-            $session->remove(self::SESSION_KEY);
         });
+        $session->remove(self::SESSION_KEY);
     }
 
     private function create(Cart $cart, ?User $user, ?string $token): Cart
