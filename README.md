@@ -1,125 +1,128 @@
 # Sport E — Symfony 8.1 + React storefront
 
-Работающий интернет-магазин: Symfony 8.1 API в корне репозитория, React + TypeScript SPA в `frontend/`, PostgreSQL,
-Redis cache и очередь Symfony Messenger. Локальное окружение запускается Docker Compose; production собирается в
-отдельный multi-stage образ FrankenPHP/Caddy.
+[Russian version](README.ru.md)
 
-Детальный статус миграции по строкам blueprint и доказательства проверок — в
-[docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md). Архитектурные решения — в
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), контракт API — в [openapi/openapi.yaml](openapi/openapi.yaml).
+A working online store: a Symfony 8.1 API at the repository root, a React + TypeScript SPA in `frontend/`, PostgreSQL,
+Redis cache, and a Symfony Messenger queue. The local environment runs via Docker Compose; production is built as a
+separate multi-stage FrankenPHP/Caddy image.
 
-## Возможности
+Line-by-line blueprint migration status and verification evidence are in
+[docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md). Architectural decisions are in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), the API contract is in [openapi/openapi.yaml](openapi/openapi.yaml).
 
-- Market context: валюты EUR/BYN/PLN, локали en/ru/pl, VAT по стране доставки, определение страны через GeoIP.
-- Локализованный каталог: дерево категорий, списки с фильтрами/сортировкой/пагинацией, карточки товаров с вариантами.
-- Корзина гостя и пользователя с merge при входе; транзакционный checkout с резервированием запасов и заказами `SP-*`.
-- Identity: регистрация, вход, подтверждение email, сброс и подтверждение пароля, профиль с адресами и заказами.
-- Административные переходы статусов заказов с возвратом запасов при отмене.
-- Курсы валют: string-safe обновление по цепочкам источников (BYN, PLN) со stale fallback.
-- Storefront cache: SWR-конверты с generation rotation, lock от stampede и деградацией при недоступности Redis.
-- Symfony Scheduler + Messenger: почасовое обновление курсов, прогрев кэша каждые 5 минут, асинхронная почта и
-  инвалидация.
-- Health endpoints и OpenAPI-контракт, синхронизируемый contract test с маршрутами.
+## Features
 
-### Отложенный scope
+- Market context: EUR/BYN/PLN currencies, en/ru/pl locales, VAT by delivery country, country detection via GeoIP.
+- Localized catalog: category tree, lists with filters/sorting/pagination, product cards with variants.
+- Guest and user carts with merge on login; transactional checkout with stock reservation and `SP-*` orders.
+- Identity: registration, login, email verification, password reset and confirmation, profile with addresses and orders.
+- Administrative order status transitions with stock release on cancellation.
+- Exchange rates: string-safe updates through source chains (BYN, PLN) with stale fallback.
+- Storefront cache: SWR envelopes with generation rotation, stampede locking, and degradation when Redis is unavailable.
+- Symfony Scheduler + Messenger: hourly rate refresh, cache warming every 5 minutes, asynchronous mail and
+  invalidation.
+- Health endpoints and an OpenAPI contract kept in sync with routes by a contract test.
 
-Shop Pay (обработка payment session/attempt), входящий Shopify webhook и payment reconciliation **отложены решением
-пользователя от 2026-10-13** и не реализованы. Нейтральный payment foundation — схема, entities, fixtures и
-`SodiumFieldCipher` — сохранён и покрыт тестами. Production обязан задать сгенерированный `APP_FIELD_CIPHER_KEY` до
-включения платёжных сервисов. Подробности и матрица статусов:
+### Deferred scope
+
+Shop Pay (payment session/attempt handling), the inbound Shopify webhook, and payment reconciliation have been
+**deferred by user decision dated 2026-10-13** and are not implemented. The neutral payment foundation — schema,
+entities, fixtures, and `SodiumFieldCipher` — is retained and covered by tests. Production must set a generated
+`APP_FIELD_CIPHER_KEY` before enabling payment services. Details and the status matrix:
 [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
 
-## Версии и требования
+## Versions and requirements
 
-Для запуска нужны Docker Engine/Docker Desktop с Linux-контейнерами, Docker Compose v2 с поддержкой `up --wait`, Git и
-POSIX shell. Docker daemon должен быть запущен. `make` — необязательная обёртка над исполняемым `./dev`. Основной
-Docker-workflow (`init`, `up`, `test`, `lint`, `build`) не требует локальных PHP, Composer, Node.js и PostgreSQL:
-рабочие команды выполняются в контейнерах. Первый запуск скачивает образы и зависимости из публичных реестров, поэтому
-требует доступа к сети.
+Running the project requires Docker Engine/Docker Desktop with Linux containers, Docker Compose v2 with `up --wait`
+support, Git, and a POSIX shell. The Docker daemon must be running. `make` is an optional wrapper around the executable
+`./dev`. The main Docker workflow (`init`, `up`, `test`, `lint`, `build`) requires no local PHP, Composer, Node.js, or
+PostgreSQL: day-to-day commands run inside containers. The first run downloads images and dependencies from public
+registries, so it requires network access.
 
-Browser E2E (`./dev e2e`) — явное исключение: `scripts/e2e.sh` запускает Vite и Playwright на хосте и использует
-системный Chromium/Chrome. Для него нужны локальный Node.js 24, `cd frontend && npm ci` (зависимости на хосте, а не в
-Docker volume), POSIX-утилиты `curl` и `nc`, а также исполняемый Chromium-family browser — установленный Chrome/Chromium
-либо путь к бинарнику в переменной `E2E_CHROMIUM`. Скрипт проверяет всё это в preflight до создания базы и контейнеров.
+Browser E2E (`./dev e2e`) is the only exception: `scripts/e2e.sh` runs Vite and Playwright on the host and uses the
+system Chromium/Chrome. It requires local Node.js 24, `cd frontend && npm ci` (dependencies on the host, not in a Docker
+volume), the POSIX utilities `curl` and `nc`, and an executable Chromium-family browser — an installed Chrome/Chromium
+or a binary path in the `E2E_CHROMIUM` variable. The script checks all of this in preflight before creating the database
+and containers.
 
-На машине должны быть свободны порты 5173, 8080 и 8443; их можно изменить в локальном `.env`. Runtime поддерживает
-amd64/arm64 в пределах платформ опубликованных базовых образов. Контейнер web по умолчанию ограничен 1 CPU и 768 МБ;
-PostgreSQL, Redis, Messenger и Vite требуют дополнительной памяти Docker VM.
+Ports 5173, 8080, and 8443 must be free on the machine; they can be changed in the local `.env`. The runtime supports
+amd64/arm64 within the platforms of the published base images. The web container is limited to 1 CPU and 768 MB by
+default; PostgreSQL, Redis, Messenger, and Vite require additional Docker VM memory.
 
-| Компонент | Зафиксированная версия |
+| Component | Pinned version |
 | --- | --- |
-| PHP в runtime-образе | 8.5.11 |
+| PHP in the runtime image | 8.5.11 |
 | FrankenPHP / Caddy | 1.13.1 / 2.11.7 |
-| Symfony FrameworkBundle | 8.1.8; прямые Symfony-пакеты ограничены `8.1.*` |
-| Symfony Runtime | 8.1.0, с native FrankenPHP worker mode |
+| Symfony FrameworkBundle | 8.1.8; direct Symfony packages constrained to `8.1.*` |
+| Symfony Runtime | 8.1.0, with native FrankenPHP worker mode |
 | Doctrine ORM / DBAL | 3.7.5 / 4.5.0 |
 | DoctrineBundle / DoctrineMigrationsBundle | 3.3.2 / 3.7.0 |
 | MonologBundle / Monolog | 4.1.0 / 3.12.1 |
 | PostgreSQL / Redis | 18.6 / 8.10.2 |
 | Composer image | 2.10.3 |
-| Node.js | 24.21.0; frontend требует `>=24.15.0 <25` |
+| Node.js | 24.21.0; frontend requires `>=24.15.0 <25` |
 | React / React Router | 19.3.0 / 8.4.0 |
 | Vite / TypeScript | 8.3.4 / 6.0.3 |
-| Tailwind CSS / официальный Vite plugin | 4.3.3 / 4.3.3 |
+| Tailwind CSS / official Vite plugin | 4.3.3 / 4.3.3 |
 | TanStack Query | 5.104.2 |
 | PHPUnit / PHPStan / PHP-CS-Fixer | 13.4.2 / 2.3.1 / 3.95.27 |
 | Vitest / ESLint / Prettier | 5.0.4 / 10.12.0 / 3.9.10 |
-| Playwright | @playwright/test 1.64.0 (dev dependency; системный Chromium) |
+| Playwright | @playwright/test 1.64.0 (dev dependency; system Chromium) |
 
-PHP 8.5 выбран как совместимая стабильная версия и среда для текущих dev tools. Точные транзитивные зависимости
-находятся в `composer.lock` и `frontend/package-lock.json`; базовые Docker-образы закреплены digest в Dockerfile и
-Compose. Для воспроизводимой установки используют `composer install` и `npm ci`, не `update`.
+PHP 8.5 was chosen as the compatible stable version and environment for the current dev tools. Exact transitive
+dependencies live in `composer.lock` and `frontend/package-lock.json`; base Docker images are pinned by digest in the
+Dockerfile and Compose. For reproducible installs use `composer install` and `npm ci`, not `update`.
 
-## Первый запуск одной командой
+## One-command first run
 
-Из корня нового checkout:
+From the root of a fresh checkout:
 
 ```sh
 ./dev init
 ```
 
-Команда копирует `.env.example` в игнорируемый Git файл `.env`, генерирует случайный `APP_SECRET`, собирает dev-образы,
-устанавливает зависимости в Docker volumes и поднимает окружение с ожиданием healthchecks. Уже существующий `.env`
-сохраняется. PostgreSQL/Redis запускаются первыми, отдельный service `migrate` применяет версионированные migrations,
-затем запускаются backend, worker и Vite.
+The command copies `.env.example` to the Git-ignored `.env` file, generates a random `APP_SECRET`, builds the dev
+images, installs dependencies into Docker volumes, and starts the environment while waiting for health checks. An
+existing `.env` is preserved. PostgreSQL/Redis start first, a separate `migrate` service applies the versioned
+migrations, then backend, worker, and Vite start.
 
-Пароль PostgreSQL из `.env.example` предназначен только для локальной разработки; вручную вводить секреты для `./dev
-init` не нужно. `.env`, зависимости, runtime cache, сертификаты и backups исключены из Git. PostgreSQL и Redis не
-публикуют порты наружу.
+The PostgreSQL password from `.env.example` is intended for local development only; no secrets need to be entered
+manually for `./dev init`. `.env`, dependencies, runtime cache, certificates, and backups are excluded from Git.
+PostgreSQL and Redis do not publish ports to the host.
 
-### Демонстрационные данные (только dev/test)
+### Demo data (dev/test only)
 
-После первого запуска база пустая. На **новой или пустой dev-базе** загрузите детерминированные fixtures:
+After the first run the database is empty. On a **new or empty dev database**, load the deterministic fixtures:
 
 ```sh
 ./dev console doctrine:fixtures:load --no-interaction
 ```
 
-Внимание: `doctrine:fixtures:load` **полностью очищает базу (purge)** перед загрузкой. Запускайте её только в dev/test;
-в production fixtures не применяются никогда. Состав данных и поведение описаны в
+Warning: `doctrine:fixtures:load` **completely purges the database** before loading. Run it only in dev/test;
+fixtures are never applied in production. The data set and behavior are described in
 [docs/DEVELOPMENT_DATA.md](docs/DEVELOPMENT_DATA.md).
 
-| Email | Пароль | Роль |
+| Email | Password | Role |
 | --- | --- | --- |
-| `customer@example.test` | `SportE!2026` | Покупатель, email подтверждён |
-| `unverified@example.test` | `SportE!2026` | Покупатель, email не подтверждён |
-| `admin@example.test` | `SportE!2026` | Администратор |
+| `customer@example.test` | `SportE!2026` | Customer, email verified |
+| `unverified@example.test` | `SportE!2026` | Customer, email not verified |
+| `admin@example.test` | `SportE!2026` | Administrator |
 
-При работающем `make` можно использовать `make init`: Makefile вызывает ту же команду. На macOS системный `make` может
-отказываться работать до принятия лицензии Xcode. В проверенном окружении это ограничение присутствует; `./dev`
-позволяет запускать проект и все проверки без изменения системных настроек или принятия лицензии.
+With a working `make` you can use `make init`: the Makefile invokes the same command. On macOS the system `make` may
+refuse to work until the Xcode license is accepted. In the verified environment this limitation is present; `./dev`
+lets you run the project and all checks without changing system settings or accepting the license.
 
-| Адрес | Назначение |
+| Address | Purpose |
 | --- | --- |
 | [http://localhost:5173](http://localhost:5173) | Storefront: `/`, `/shop`, `/cart`, `/checkout`, `/orders`, `/admin/orders` |
 | [http://localhost:8080/api/health/live](http://localhost:8080/api/health/live) | Liveness |
 | [http://localhost:8080/api/health/ready](http://localhost:8080/api/health/ready) | PostgreSQL + Redis readiness |
-| [http://localhost:8080/api/version](http://localhost:8080/api/version) | Имя приложения, окружение, версия сборки |
-| [https://localhost:8443/api/health/live](https://localhost:8443/api/health/live) | Локальный HTTPS backend |
+| [http://localhost:8080/api/version](http://localhost:8080/api/version) | Application name, environment, build version |
+| [https://localhost:8443/api/health/live](https://localhost:8443/api/health/live) | Local HTTPS backend |
 
-Frontend использует относительный `/api`; Vite проксирует его в `http://backend:8080`. CORS не требуется.
+The frontend uses a relative `/api`; Vite proxies it to `http://backend:8080`. No CORS is required.
 
-Проверка состояния контейнеров:
+Checking container state:
 
 ```sh
 docker compose ps
@@ -127,170 +130,172 @@ curl --fail http://localhost:8080/api/health/live
 curl --fail http://localhost:8080/api/health/ready
 ```
 
-Успешный liveness возвращает `{"status":"ok"}` без обращения к базе или Redis. Readiness действительно выполняет
-PostgreSQL `SELECT 1` и Redis `PING`: при недоступности зависимости возвращает HTTP 503 и состояния `checks`.
-Неизвестный `/api/*` маршрут возвращает HTTP 404 в формате `{"error":{"code":"not_found","message":"Not Found"}}`.
-Внутренние исключения, DSN и секреты не попадают в ответы API.
+A successful liveness returns `{"status":"ok"}` without touching the database or Redis. Readiness actually performs a
+PostgreSQL `SELECT 1` and a Redis `PING`: when a dependency is unavailable it returns HTTP 503 and `checks` states.
+An unknown `/api/*` route returns HTTP 404 in the `{"error":{"code":"not_found","message":"Not Found"}}` format.
+Internal exceptions, DSNs, and secrets never reach API responses.
 
-### Доверие локальному HTTPS
+### Trusting the local HTTPS
 
-Caddy создаёт локальный сертификат в volume `caddy_data`; автоматическая установка CA на хост отключена. HTTP подходит
-для обычной разработки и Vite proxy. Если нужен HTTPS в браузере, экспортируйте только публичный корневой сертификат и
-добавьте его в доверенные сертификаты своей системы:
+Caddy creates a local certificate in the `caddy_data` volume; automatic CA installation on the host is disabled. HTTP
+is fine for ordinary development and the Vite proxy. If you need HTTPS in a browser, export only the public root
+certificate and add it to your system's trusted certificates:
 
 ```sh
 mkdir -p certificates
 docker compose cp backend:/data/caddy/pki/authorities/local/root.crt certificates/caddy-local-root.crt
 ```
 
-Например, на macOS:
+For example, on macOS:
 
 ```sh
 sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain certificates/caddy-local-root.crt
 ```
 
-Для других ОС используйте штатное хранилище доверенных CA; некоторые браузеры имеют отдельное хранилище. Приватный ключ
-CA не экспортируйте. Каталог `certificates/` игнорируется Git. При удалении `caddy_data` создаётся новая CA и прежнее
-доверие необходимо обновить. Caddy предоставляет HTTP/2 и HTTP/3; HTTP/3 также требует доступного UDP-порта.
+On other OSes use the standard trusted-CA store; some browsers have a separate store. Do not export the CA private key.
+The `certificates/` directory is Git-ignored. Deleting `caddy_data` creates a new CA and the previous trust must be
+refreshed. Caddy provides HTTP/2 and HTTP/3; HTTP/3 also requires an available UDP port.
 
-## Структура
+## Structure
 
 ```text
 .
 ├── bin/                       # Symfony console
 ├── config/                    # Routes, services, Doctrine, Cache, Messenger, Scheduler
-├── migrations/                # Foundation-миграция + 4 миграции бизнес-схемы
-├── openapi/openapi.yaml       # Контракт API; синхронность проверяет contract test
+├── migrations/                # Foundation migration + 4 business-schema migrations
+├── openapi/openapi.yaml       # API contract; a contract test keeps it in sync
 ├── public/                    # PHP entrypoint
 ├── src/
 │   ├── Domain/                # Cart, Catalog, Commerce, Identity, Ordering, Payment
-│   ├── Application/           # Use cases, порты, read models, Messenger-сообщения
-│   ├── Infrastructure/        # DBAL stores, cache, crypto, HTTP-клиенты источников
+│   ├── Application/           # Use cases, ports, read models, Messenger messages
+│   ├── Infrastructure/        # DBAL stores, cache, crypto, source HTTP clients
 │   ├── Presentation/          # HTTP controllers, ApiProblem, security handlers
 │   ├── Controller/            # Health/version controllers
 │   ├── Command/               # storefront:cache-*, commerce:refresh-exchange-rates
-│   └── DataFixtures/          # Детерминированные dev/test fixtures
-├── tests/                     # Unit, functional, contract и concurrency checks
+│   └── DataFixtures/          # Deterministic dev/test fixtures
+├── tests/                     # Unit, functional, contract and concurrency checks
 ├── frontend/
-│   ├── src/pages/             # Feature pages: витрина, checkout, account, admin
-│   ├── src/api/               # API-клиенты поверх общего typed client
+│   ├── src/pages/             # Feature pages: storefront, checkout, account, admin
+│   ├── src/api/               # API clients on top of the shared typed client
 │   └── e2e/                   # Playwright browser scenarios
-├── blog-api/                  # Legacy-приложение (read-only источник; не изменяется)
+├── blog-api/                  # Legacy application (read-only source; do not modify)
 ├── docker/                    # Caddy, PHP, frontend dev image
-├── scripts/                   # Инициализация env, изолированная test DB, browser E2E
-├── docs/                      # Архитектура, статус, план миграции, dev-данные
-├── compose.yaml               # Базовые services и production runtime
-├── compose.override.yaml      # Автоматически подключаемая dev-конфигурация
+├── scripts/                   # Env init, isolated test DB, browser E2E
+├── docs/                      # Architecture, status, migration plan, dev data
+├── compose.yaml               # Base services and production runtime
+├── compose.override.yaml      # Automatically applied dev configuration
 ├── compose.prod.yaml          # Production port mappings
-├── Dockerfile                 # Dev target и multi-stage production build
-├── .env.example               # Локальные значения и обязательные ENV
-├── dev                        # Исполняемый интерфейс команд без зависимости от make
+├── Dockerfile                 # Dev target and multi-stage production build
+├── .env.example               # Local values and required ENV vars
+├── dev                        # Executable command interface without a make dependency
 ├── Makefile
 ├── composer.json
 └── composer.lock
 ```
 
-Symfony находится в корне, отдельным приложением выделен только frontend. В runtime-образе Symfony расположен в `/app`,
-production SPA — в `/app/frontend-dist`. Caddy направляет `/api` в `/app/public/index.php`, отдаёт assets напрямую и
-применяет `index.html` fallback к frontend-маршрутам. Неизвестные API-маршруты не подменяются SPA.
+Symfony lives at the root; only the frontend is a separate application. In the runtime image Symfony sits in `/app`,
+the production SPA in `/app/frontend-dist`. Caddy routes `/api` to `/app/public/index.php`, serves assets directly, and
+applies an `index.html` fallback to frontend routes. Unknown API routes are not swallowed by the SPA.
 
-## Команды разработчика
+## Developer commands
 
-Команды выполняются из корня и используют локальный Compose. Makefile предоставляет одноимённые обёртки (`make up`,
-`make test` и другие):
+Commands run from the root and use the local Compose setup. The Makefile provides same-named wrappers (`make up`,
+`make test`, and others):
 
-| Команда | Действие |
+| Command | Action |
 | --- | --- |
-| `./dev init` | Подготовить новый checkout и запустить всё окружение |
-| `./dev up` | Собрать изменённые dev-образы и поднять services |
-| `./dev down` | Остановить services; сохранить постоянные volumes |
-| `./dev logs` | Общие логи |
-| `./dev test` | Backend tests в отдельной базе, затем frontend tests |
-| `./dev e2e` | Browser E2E в изолированной test-среде (`./scripts/e2e.sh`; требует host Node + Chromium) |
+| `./dev init` | Prepare a fresh checkout and start the whole environment |
+| `./dev up` | Rebuild changed dev images and start services |
+| `./dev down` | Stop services; keep persistent volumes |
+| `./dev logs` | Aggregate logs |
+| `./dev test` | Backend tests on a separate database, then frontend tests |
+| `./dev e2e` | Browser E2E in an isolated test environment (`./scripts/e2e.sh`; requires host Node + Chromium) |
 | `./dev lint` | Composer, PHPStan, PHP-CS-Fixer, Symfony lint, Doctrine, TS/ESLint/Prettier |
-| `./dev format` | Исправить форматирование backend и frontend |
-| `./dev build` | Проверить frontend production build и собрать production image |
-| `./dev migrate` | Явно применить migrations отдельным service |
+| `./dev format` | Fix backend and frontend formatting |
+| `./dev build` | Verify the frontend production build and build the production image |
+| `./dev migrate` | Apply migrations via the dedicated service |
 | `./dev console debug:router` | Symfony console (`make console ARGS='debug:router'`) |
-| `./dev shell` | Shell backend-контейнера |
-| `./dev worker-logs` | Логи Messenger consumer |
-| `./dev worker-start` / `./dev worker-stop` | Запустить / остановить worker |
-| `./dev failed-show` | Посмотреть failure queue |
-| `./dev failed-retry ID --force` | Повторно отправить выбранное failed message |
+| `./dev shell` | Shell into the backend container |
+| `./dev worker-logs` | Messenger consumer logs |
+| `./dev worker-start` / `./dev worker-stop` | Start / stop the worker |
+| `./dev failed-show` | Inspect the failure queue |
+| `./dev failed-retry ID --force` | Resend a selected failed message |
 
-Прикладные команды (через `./dev console`):
+Application commands (via `./dev console`):
 
 ```sh
-./dev console storefront:cache-warm --pages=2 --locale=en   # прогрев storefront cache
-./dev console storefront:cache-clear                      # ротация всех групп кэша
-./dev console commerce:refresh-exchange-rates             # курсы; делает РЕАЛЬНЫЕ внешние запросы
-./dev console debug:scheduler                             # расписание recurring messages
-./dev console debug:messenger                             # маршрутизация и handlers
+./dev console storefront:cache-warm --pages=2 --locale=en   # warm the storefront cache
+./dev console storefront:cache-clear                      # rotate all cache groups
+./dev console commerce:refresh-exchange-rates             # rates; makes REAL external requests
+./dev console debug:scheduler                             # recurring messages schedule
+./dev console debug:messenger                             # routing and handlers
 ```
 
-`./dev down` не удаляет данные PostgreSQL. Команды `down --volumes` и `volume rm` удаляют данные; для обычной остановки
-они не нужны. После изменения lock-файлов повторите `./dev init`, чтобы обновить зависимости в named volumes.
+`./dev down` does not delete PostgreSQL data. The `down --volumes` and `volume rm` commands do delete data; they are
+not needed for a normal stop. After changing lock files, rerun `./dev init` to refresh dependencies in the named
+volumes.
 
-## Окружение и timeout
+## Environment and timeouts
 
-`.env.example` перечисляет обязательные переменные. `.env` обслуживает локальный Compose и Symfony; production
-использует отдельный игнорируемый `.env.prod.local` или внешнее хранилище секретов. В production dotenv отключён и
-Symfony получает реальные environment variables от Compose.
+`.env.example` lists the required variables. `.env` serves the local Compose setup and Symfony; production uses a
+separate ignored `.env.prod.local` or an external secrets store. In production dotenv is disabled and Symfony receives
+real environment variables from Compose.
 
-| Переменные | Назначение / локальные значения |
+| Variables | Purpose / local values |
 | --- | --- |
-| `APP_SECRET`, `APP_NAME`, `BUILD_VERSION` | Секрет приложения, отображаемое имя, идентификатор сборки |
+| `APP_SECRET`, `APP_NAME`, `BUILD_VERSION` | Application secret, display name, build identifier |
 | `APP_ENV`, `APP_DEBUG` | Dev: `dev` / `1`; production runtime: `prod` / `0` |
-| `APP_PUBLIC_URL` | Публичный origin для ссылок в письмах; локально `http://localhost:5173` |
-| `MAILER_DSN`, `MAILER_FROM` | Mail transport (`null://null` локально) и адрес отправителя |
-| `COMPOSE_PROJECT_NAME` | Изоляция имён services, images и volumes |
-| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | База и credentials; локальные placeholders |
-| `DATABASE_URL` | DSN для прямого Symfony-запуска; Compose формирует его из `POSTGRES_*` |
-| `POSTGRES_MAX_CONNECTIONS` | Общий server limit PostgreSQL: 50 |
-| `DB_CONNECTION_TIMEOUT`, `DB_STATEMENT_TIMEOUT_MS` | Connect 2 секунды; SQL statement timeout 3000 мс |
-| `REDIS_URL` | Прикладной cache provider: `redis://redis:6379` |
-| `REDIS_CONNECT_TIMEOUT`, `REDIS_READ_TIMEOUT` | По 1 секунде |
+| `APP_PUBLIC_URL` | Public origin for links in emails; locally `http://localhost:5173` |
+| `MAILER_DSN`, `MAILER_FROM` | Mail transport (`null://null` locally) and sender address |
+| `COMPOSE_PROJECT_NAME` | Isolation of service, image, and volume names |
+| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | Database and credentials; local placeholders |
+| `DATABASE_URL` | DSN for running Symfony directly; Compose builds it from `POSTGRES_*` |
+| `POSTGRES_MAX_CONNECTIONS` | PostgreSQL total server limit: 50 |
+| `DB_CONNECTION_TIMEOUT`, `DB_STATEMENT_TIMEOUT_MS` | Connect 2 seconds; SQL statement timeout 3000 ms |
+| `REDIS_URL` | Application cache provider: `redis://redis:6379` |
+| `REDIS_CONNECT_TIMEOUT`, `REDIS_READ_TIMEOUT` | 1 second each |
 | `REDIS_MAXMEMORY` | Redis memory budget: `128mb` |
 | `MESSENGER_TRANSPORT_DSN` | `doctrine://default?auto_setup=false` |
-| `MESSENGER_TIME_LIMIT`, `MESSENGER_MEMORY_LIMIT` | Ротация consumer: 3600 секунд / мягкий memory limit |
-| `COMMERCE_DEFAULT_COUNTRY`, `GEOIP_URL` | Страна по умолчанию `DE`; GeoIP endpoint с placeholder `{ip}` |
-| `MYFIN_EUR_BYN_URL` | Источник курса BYN (Myfin HTML) |
-| `WALUTOMAT_EUR_PLN_URL`, `WALUTOMAT_API_TOKEN` | Источник курса PLN и его bearer token; пусто — fallback на NBP |
-| `DELIVERY_STANDARD_NET_CENTS`, `DELIVERY_EXPRESS_NET_CENTS` | Тарифы доставки в net cents: 590 / 1290 |
-| `DELIVERY_FREE_SHIPPING_GROSS_EUR_CENTS` | Порог бесплатной доставки: 5000 gross EUR cents |
-| `STOREFRONT_CACHE_ENABLED` | Включение storefront cache; локально `1` |
-| `STOREFRONT_CACHE_PREFIX`, `STOREFRONT_CACHE_GENERATION_TTL` | Префикс ключей `sport_e`; TTL поколения 2592000 |
-| `STOREFRONT_CACHE_{TREE,LIST,CARD}_{FRESH,TOTAL}_TTL` | Свежие/полные TTL групп кэша |
-| `EXCHANGE_RATE_CACHE_TTL` | TTL пула курсов, максимум 300 секунд |
-| `LOCK_DSN` | `flock` на одном хосте; для multi-replica нужен shared lock store |
-| `APP_FIELD_CIPHER_KEY` | Base64 32-byte ключ `SodiumFieldCipher`; фундамент отложенных платежей |
-| `FRANKENPHP_WORKERS`, `FRANKENPHP_MAX_THREADS` | Два web workers; общий максимум PHP threads — четыре |
-| `PHP_MEMORY_LIMIT`, `WORKER_PHP_MEMORY_LIMIT` | PHP memory limits web / CLI consumer |
-| `WEB_CPUS`, `WEB_MEMORY_LIMIT`, `WORKER_MEMORY_LIMIT` | Resource limits контейнеров |
-| `TRUSTED_PROXIES`, `TRUSTED_HOSTS` | Допустимые proxy IP/CIDR и host regex |
-| `HTTP_PORT`, `HTTPS_PORT`, `FRONTEND_PORT` | Локальные host ports: 8080 / 8443 / 5173 |
-| `PUBLIC_HTTPS_PORT` | Публичный HTTPS-порт для HTTP redirect; локально 8443, production 443 |
-| `SERVER_NAME` | Caddy domain: локально `localhost`, в production реальный DNS hostname |
+| `MESSENGER_TIME_LIMIT`, `MESSENGER_MEMORY_LIMIT` | Consumer rotation: 3600 seconds / soft memory limit |
+| `COMMERCE_DEFAULT_COUNTRY`, `GEOIP_URL` | Default country `DE`; GeoIP endpoint with `{ip}` placeholder |
+| `MYFIN_EUR_BYN_URL` | BYN rate source (Myfin HTML) |
+| `WALUTOMAT_EUR_PLN_URL`, `WALUTOMAT_API_TOKEN` | PLN rate source and its bearer token; empty — falls back to NBP |
+| `DELIVERY_STANDARD_NET_CENTS`, `DELIVERY_EXPRESS_NET_CENTS` | Delivery rates in net cents: 590 / 1290 |
+| `DELIVERY_FREE_SHIPPING_GROSS_EUR_CENTS` | Free delivery threshold: 5000 gross EUR cents |
+| `STOREFRONT_CACHE_ENABLED` | Enable the storefront cache; locally `1` |
+| `STOREFRONT_CACHE_PREFIX`, `STOREFRONT_CACHE_GENERATION_TTL` | Key prefix `sport_e`; generation TTL 2592000 |
+| `STOREFRONT_CACHE_{TREE,LIST,CARD}_{FRESH,TOTAL}_TTL` | Fresh/total TTL per cache group |
+| `EXCHANGE_RATE_CACHE_TTL` | Exchange-rate pool TTL, maximum 300 seconds |
+| `LOCK_DSN` | `flock` on a single host; multi-replica needs a shared lock store |
+| `APP_FIELD_CIPHER_KEY` | Base64 32-byte `SodiumFieldCipher` key; foundation of the deferred payments |
+| `FRANKENPHP_WORKERS`, `FRANKENPHP_MAX_THREADS` | Two web workers; total maximum PHP threads — four |
+| `PHP_MEMORY_LIMIT`, `WORKER_PHP_MEMORY_LIMIT` | PHP memory limits for web / CLI consumer |
+| `WEB_CPUS`, `WEB_MEMORY_LIMIT`, `WORKER_MEMORY_LIMIT` | Container resource limits |
+| `TRUSTED_PROXIES`, `TRUSTED_HOSTS` | Permitted proxy IP/CIDR and host regex |
+| `HTTP_PORT`, `HTTPS_PORT`, `FRONTEND_PORT` | Local host ports: 8080 / 8443 / 5173 |
+| `PUBLIC_HTTPS_PORT` | Public HTTPS port for HTTP redirect; locally 8443, production 443 |
+| `SERVER_NAME` | Caddy domain: locally `localhost`, in production a real DNS hostname |
 
-Compose преобразует `DB_CONNECTION_TIMEOUT` в libpq `PGCONNECT_TIMEOUT`, а `DB_STATEMENT_TIMEOUT_MS` — в `PGOPTIONS=-c
-statement_timeout=...`. Поэтому лимиты действуют и на прямые Doctrine-подключения. При запуске PHP вне Compose эти
-libpq-переменные требуется задать самостоятельно. Общая длительность readiness может включать последовательную проверку
-нескольких зависимостей; endpoint не обещает единый трёхсекундный deadline.
+Compose maps `DB_CONNECTION_TIMEOUT` to the libpq `PGCONNECT_TIMEOUT`, and `DB_STATEMENT_TIMEOUT_MS` to
+`PGOPTIONS=-c statement_timeout=...`. The limits therefore also apply to direct Doctrine connections. When running PHP
+outside Compose, these libpq variables must be set manually. Total readiness duration may include sequential checks of
+several dependencies; the endpoint does not promise a single three-second deadline.
 
-Пустой `TRUSTED_PROXIES` означает недоверие к proxy headers. При добавлении reverse proxy/CDN указывайте его точные
-адреса или CIDR и сохраняйте host allowlist. Произвольное доверие всем клиентам или `TRUSTED_HOSTS=.*` не требуется. Для
-прямого локального доступа к PostgreSQL/Redis используйте отдельный override с привязкой к `127.0.0.1`; стандартный
-Compose оставляет их в своей внутренней сети.
+An empty `TRUSTED_PROXIES` means proxy headers are not trusted. When adding a reverse proxy/CDN, specify its exact
+addresses or CIDRs and keep the host allowlist. Arbitrary trust of all clients or `TRUSTED_HOSTS=.*` is not required.
+For direct local access to PostgreSQL/Redis use a separate override bound to `127.0.0.1`; the default Compose setup
+keeps them on their internal network.
 
-## PostgreSQL, migrations и Redis
+## PostgreSQL, migrations, and Redis
 
-PostgreSQL — единственная основная реляционная база. `postgres_data` хранит данные; путь volume соответствует PostgreSQL
-18. Foundation-миграция создаёт `messenger_messages`; четыре последующие миграции добавляют нормализованную бизнес-схему
-— 23 предметные, auth-, session- и integration-таблицы. Doctrine также ведёт служебную `doctrine_migration_versions`.
-Схема создана заново, ETL из legacy не выполнялся. Fixtures предназначены только для dev/test.
+PostgreSQL is the only primary relational database. `postgres_data` stores the data; the volume path matches
+PostgreSQL 18. The foundation migration creates `messenger_messages`; the four subsequent migrations add the
+normalized business schema — 23 domain, auth, session, and integration tables. Doctrine also maintains the internal
+`doctrine_migration_versions` table. The schema was created from scratch; no ETL from the legacy system was performed.
+Fixtures are intended for dev/test only.
 
-`migrate` выполняется перед запуском web. `auto_setup=false` запрещает Messenger создавать свою таблицу на рабочем
-запросе/старте consumer. Для просмотра и применения версии:
+`migrate` runs before web starts. `auto_setup=false` prevents Messenger from creating its table on a hot request or
+consumer start. To inspect and apply versions:
 
 ```sh
 ./dev console doctrine:migrations:status
@@ -298,31 +303,31 @@ PostgreSQL — единственная основная реляционная 
 ./dev console doctrine:migrations:up-to-date
 ```
 
-Production использует эти версионированные migrations. `doctrine:schema:update --force` не является частью deployment.
-Совместимость migrations со старой и новой версиями приложения требуется учитывать при rolling deployment.
+Production uses these versioned migrations. `doctrine:schema:update --force` is not part of deployment. Migration
+compatibility with the old and new application versions must be considered during a rolling deployment.
 
-`cache.app` использует Redis с короткими сетевыми timeout. `cache.system` сохраняет стандартный адаптер Symfony.
-Storefront cache и exchange-rate cache — отдельные Redis-пулы из `config/packages/storefront_cache.yaml`. Redis
-предназначен только для восстанавливаемого кэша: memory limit 128 МБ, eviction `allkeys-lru`, AOF и snapshots отключены.
-Перезапуск Redis может очистить кэш; каталог и курсы при этом деградируют к прямым запросам в базу, а не к ошибкам.
-Критические очереди и долговечные данные не хранятся в этом Redis.
+`cache.app` uses Redis with short network timeouts. `cache.system` keeps the standard Symfony adapter. The storefront
+cache and exchange-rate cache are separate Redis pools from `config/packages/storefront_cache.yaml`. Redis is used
+only for recoverable cache: a 128 MB memory limit, `allkeys-lru` eviction, AOF and snapshots disabled. A Redis restart
+may clear the cache; the catalog and rates then degrade to direct database queries rather than errors. Critical queues
+and durable data are not stored in this Redis.
 
-## Messenger worker и Scheduler
+## Messenger worker and Scheduler
 
-`async` и `failed` — отдельные queue names в PostgreSQL `messenger_messages`. Основной transport имеет три retry с
-задержками от одной секунды; после исчерпания повторов сообщение перемещается в failure transport. В `async`
-маршрутизируются `SendEmailMessage` (асинхронная почта), `RefreshCatalogCache` (stale-refresh storefront cache),
-`WarmStorefrontCache` и `RefreshExchangeRates`.
+`async` and `failed` are separate queue names in the PostgreSQL `messenger_messages` table. The main transport has
+three retries with delays starting at one second; once retries are exhausted the message moves to the failure
+transport. `async` routes `SendEmailMessage` (asynchronous mail), `RefreshCatalogCache` (storefront cache
+stale-refresh), `WarmStorefrontCache`, and `RefreshExchangeRates`.
 
-Schedule `default` (`StoreSchedule`) публикует в `scheduler_default`: `0 * * * *` — `RefreshExchangeRates`, `*/5 * * *
-*` — `WarmStorefrontCache(2)`; stateful schedule хранит состояние в cache pool и применяет `processOnlyLastMissedRun`.
-Один worker одновременно consume `scheduler_default` и `async`.
+The `default` schedule (`StoreSchedule`) publishes to `scheduler_default`: `0 * * * *` — `RefreshExchangeRates`,
+`*/5 * * * *` — `WarmStorefrontCache(2)`; the stateful schedule stores its state in a cache pool and applies
+`processOnlyLastMissedRun`. A single worker consumes `scheduler_default` and `async` at the same time.
 
-Consumer работает отдельным service с `init`, `pcntl`, передачей сигналов через `exec` и `stop_grace_period: 60s`. Время
-и память ограничены; `restart: unless-stopped` запускает consumer снова после плановой ротации. Container stop передаёт
-SIGTERM; долгие handlers должны согласовывать grace period, redelivery timeout и идемпотентность. Doctrine delivery
-может повториться, поэтому exactly-once не заявляется; handlers проектируются идемпотентными. Healthcheck worker
-проверяет процесс consumer и PostgreSQL.
+The consumer runs as a separate service with `init`, `pcntl`, signal passing via `exec`, and `stop_grace_period: 60s`.
+Time and memory are limited; `restart: unless-stopped` brings the consumer back after a scheduled rotation. A
+container stop sends SIGTERM; long-running handlers must reconcile grace period, redelivery timeout, and idempotency.
+Doctrine delivery may repeat, so exactly-once is not claimed; handlers are designed to be idempotent. The worker
+health check verifies the consumer process and PostgreSQL.
 
 ```sh
 ./dev worker-logs
@@ -336,17 +341,17 @@ SIGTERM; долгие handlers должны согласовывать grace per
 ./dev worker-start
 ```
 
-Перед retry выясняют причину сбоя и последствия повторной обработки. Для production те же console-команды выполняются
-через явный production Compose, например:
+Before a retry, investigate the cause of the failure and the consequences of reprocessing. In production the same
+console commands run through the explicit production Compose, for example:
 
 ```sh
 docker compose --env-file .env.prod.local -f compose.yaml -f compose.prod.yaml \
     exec backend php bin/console messenger:failed:show
 ```
 
-## Проверки качества
+## Quality checks
 
-После запуска окружения:
+After the environment is up:
 
 ```sh
 ./dev test
@@ -355,47 +360,47 @@ docker compose --env-file .env.prod.local -f compose.yaml -f compose.prod.yaml \
 ./dev e2e
 ```
 
-Backend использует PHPUnit, PHPStan, PHP-CS-Fixer, `composer validate --strict`, Symfony `lint:yaml`/`lint:container`,
-валидацию ORM mapping и проверку актуальности migrations. Скрипт тестов очищает test cache, создаёт отдельную базу с
-уникальным test suffix, применяет migrations и удаляет её через cleanup trap даже после ошибки тестов. Runtime dev DB не
-служит хранилищем временных тестовых данных. Новые PHP-файлы используют строгую типизацию и атрибуты.
+The backend uses PHPUnit, PHPStan, PHP-CS-Fixer, `composer validate --strict`, Symfony `lint:yaml`/`lint:container`,
+ORM mapping validation, and a check that migrations are up to date. The test script clears the test cache, creates a separate
+database with a unique test suffix, applies migrations, and drops it via a cleanup trap even after test failures. The
+runtime dev DB is not used as storage for temporary test data. New PHP files use strict types and attributes.
 
-Frontend проверяется TypeScript, ESLint, Prettier и Vitest/Testing Library; `npm run build` выполняет typecheck и Vite
-build.
+The frontend is checked with TypeScript, ESLint, Prettier, and Vitest/Testing Library; `npm run build` performs
+typecheck and the Vite build.
 
-`./dev e2e` (`scripts/e2e.sh`) создаёт уникальную disposable-базу на работающем PostgreSQL, применяет migrations и
-fixtures, поднимает разовый backend-контейнер (`APP_ENV=test`) на свободном localhost-порту и Vite-сервер с proxy на
-него, затем запускает Playwright на системном Chromium. Все процессы, контейнеры, volumes и сама база удаляются в trap;
-dev-база и основной стек не затрагиваются. Скрипт повторяем и не делает внешних вызовов (test env использует fake rate
-fetcher и null mail transport).
+`./dev e2e` (`scripts/e2e.sh`) creates a unique disposable database on the running PostgreSQL, applies migrations and
+fixtures, starts a one-off backend container (`APP_ENV=test`) on a free localhost port and a Vite server proxying to
+it, then runs Playwright on the system Chromium. All processes, containers, volumes, and the database itself are
+removed in a trap; the dev database and main stack are untouched. The script is repeatable and makes no external calls
+(the test env uses a fake rate fetcher and a null mail transport).
 
-В отличие от остальных `./dev`-команд, E2E выполняет Vite и Playwright на хосте, поэтому требует: локальный Node.js 24 и
-`cd frontend && npm ci`, POSIX-утилиты `curl`/`nc`, исполняемый Chrome/Chromium или `E2E_CHROMIUM` с путём к бинарнику.
-Preflight останавливает скрипт с подсказкой до создания базы и контейнеров.
+Unlike the other `./dev` commands, E2E runs Vite and Playwright on the host and therefore requires: local Node.js 24
+and `cd frontend && npm ci`, the POSIX utilities `curl`/`nc`, an executable Chrome/Chromium or `E2E_CHROMIUM` pointing
+to a binary. Preflight stops the script with a hint before creating the database and containers.
 
-Результаты реального выполнения команд:
+Real command results:
 
-| Проверка | Статус |
+| Check | Status |
 | --- | --- |
-| Backend suite в disposable-базе (`scripts/backend-test.sh`) | Пройдено: 312 tests, 1713 assertions |
-| Backend suite на хосте (`composer test`) | Пройдено: 312 tests, 846 assertions, 42 infra-gated skips |
-| `composer lint` (composer validate, PHPStan, YAML, container, mapping) | Пройдено: PHPStan 0 errors |
-| OpenAPI contract test | Пройдено: 1 test, 99 assertions; маршруты и контракт синхронны |
-| Frontend: Vitest, lint, typecheck, format, production build | Пройдено: 61/61 tests; все проверки и Vite build |
-| Playwright E2E (`./dev e2e`) | Пройдено: 4/4 — guest checkout, register→order, admin transition, mobile smoke |
-| Migration lifecycle на disposable-базе | Пройдено: latest → `Version20261013000000` → latest; schema in sync |
-| Fixture idempotency | Пройдено: 2 purge/load подряд — идентичные counts, natural keys и timestamps |
+| Backend suite on a disposable database (`scripts/backend-test.sh`) | Passed: 312 tests, 1713 assertions |
+| Backend suite on the host (`composer test`) | Passed: 312 tests, 846 assertions, 42 infra-gated skips |
+| `composer lint` (composer validate, PHPStan, YAML, container, mapping) | Passed: PHPStan 0 errors |
+| OpenAPI contract test | Passed: 1 test, 99 assertions; routes and contract in sync |
+| Frontend: Vitest, lint, typecheck, format, production build | Passed: 61/61 tests; all checks and the Vite build |
+| Playwright E2E (`./dev e2e`) | Passed: 4/4 — guest checkout, register→order, admin transition, mobile smoke |
+| Migration lifecycle on a disposable database | Passed: latest → `Version20261013000000` → latest; schema in sync |
+| Fixture idempotency | Passed: 2 consecutive purge/load runs — identical counts, natural keys and timestamps |
 
-Известная оговорка: `testConcurrentCheckoutsCannotOversell` опирается на timing двух параллельных HTTP-запросов, как
-большинство PHP-тестов конкурентности; в прогонах он стабилен, но теоретически чувствителен к нагрузке.
+Known caveat: `testConcurrentCheckoutsCannotOversell` relies on the timing of two parallel HTTP requests, like most
+PHP concurrency tests; it is stable in runs but theoretically sensitive to load.
 
-## Production build и запуск
+## Production build and run
 
-Production запускается с **явными** `-f compose.yaml -f compose.prod.yaml`: это исключает автоматически подключаемый
-`compose.override.yaml`, dev bind mounts, Vite и dev dependency volumes. `./dev prod-build`/`./dev prod-up` и их
-Makefile-обёртки уже используют такие флаги. Не запускайте production обычным `docker compose up`.
+Production is started with **explicit** `-f compose.yaml -f compose.prod.yaml`: this excludes the automatically
+applied `compose.override.yaml`, dev bind mounts, Vite, and dev dependency volumes. `./dev prod-build`/`./dev prod-up`
+and their Makefile wrappers already use these flags. Do not start production with a plain `docker compose up`.
 
-Подготовьте отдельный игнорируемый файл окружения:
+Prepare a separate ignored environment file:
 
 ```sh
 cp .env.example .env.prod.local
@@ -404,8 +409,8 @@ openssl rand -hex 32
 openssl rand -base64 32
 ```
 
-Сохраните два hex-значения как `APP_SECRET` и `POSTGRES_PASSWORD`, base64-значение — как `APP_FIELD_CIPHER_KEY`, затем
-настройте файл для своего deployment:
+Save the two hex values as `APP_SECRET` and `POSTGRES_PASSWORD`, and the base64 value as `APP_FIELD_CIPHER_KEY`, then
+adapt the file for your deployment:
 
 ```dotenv
 COMPOSE_PROJECT_NAME=sport-e-prod
@@ -427,27 +432,28 @@ HTTPS_PORT=443
 PUBLIC_HTTPS_PORT=443
 ```
 
-Placeholder-значения заменяются перед запуском. Разные `COMPOSE_PROJECT_NAME` отделяют local и production volumes;
-`BUILD_VERSION` должен меняться для новой сборки. DNS hostname, firewall и TCP 80/443 должны позволять Caddy получить
-ACME-сертификат; UDP 443 нужен для HTTP/3. Loopback host оставлен в allowlist для внутреннего healthcheck. Если TLS
-завершает внешний reverse proxy, его адреса и публичный origin необходимо настроить отдельно.
+Placeholder values are replaced before launch. Distinct `COMPOSE_PROJECT_NAME` values separate local and production
+volumes; `BUILD_VERSION` must change for each new build. DNS hostname, firewall, and TCP 80/443 must allow Caddy to
+obtain an ACME certificate; UDP 443 is needed for HTTP/3. The loopback host is kept in the allowlist for the internal
+health check. If an external reverse proxy terminates TLS, its addresses and the public origin must be configured
+separately.
 
-`APP_FIELD_CIPHER_KEY` — ключ нейтрального payment foundation (отложенного scope): до включения платёжных компонентов
-production должен использовать сгенерированный ключ, а не значение из примера. `LOCK_DSN=flock` корректен для одного
-хоста; при нескольких репликах web/worker настройте shared lock store (например, Redis). Storefront cache TTL можно
-переопределить переменными `STOREFRONT_CACHE_*` из `.env.example`.
+`APP_FIELD_CIPHER_KEY` is the encryption key for the neutral payment foundation (deferred scope): before enabling payment
+components, production must use a generated key, not the example value. `LOCK_DSN=flock` is correct for a single host;
+with multiple web/worker replicas configure a shared lock store (for example, Redis). Storefront cache TTLs can be
+overridden with the `STOREFRONT_CACHE_*` variables from `.env.example`.
 
-Для `POSTGRES_PASSWORD` удобно использовать hex из примера: это URL-safe значение. В Compose `DATABASE_URL` формируется
-строкой из `POSTGRES_*`; специальные символы в username/password нельзя вставлять в DSN без percent encoding. Если нужна
-произвольная строка пароля, адаптируйте DSN-конфигурацию с корректным URL encoding и отдельным настоящим паролем для
-PostgreSQL. Не коммитьте production env-файл.
+For `POSTGRES_PASSWORD` it is convenient to use hex from the example: it is URL-safe. In Compose, `DATABASE_URL` is
+built as a string from `POSTGRES_*`; special characters in the username/password cannot be embedded in a DSN without
+percent encoding. If you need an arbitrary password string, adapt the DSN configuration with correct URL encoding and
+a separate real password for PostgreSQL. Do not commit the production env file.
 
 ```sh
 ./dev prod-build
 ./dev prod-up
 ```
 
-Эквивалентные команды без Makefile:
+Equivalent commands without the Makefile:
 
 ```sh
 docker compose --env-file .env.prod.local -f compose.yaml -f compose.prod.yaml build
@@ -455,69 +461,70 @@ docker compose --env-file .env.prod.local -f compose.yaml -f compose.prod.yaml u
 docker compose --env-file .env.prod.local -f compose.yaml -f compose.prod.yaml ps
 ```
 
-`migrate` применяет migrations перед web/worker. Новый release ID обеспечивает обновление services вместе с собранным
-образом. Сборка не подключается к PostgreSQL/Redis и не требует production credentials для warmup.
+`migrate` applies migrations before web/worker. A new release ID ensures services update together with the built
+image. The build does not connect to PostgreSQL/Redis and does not need production credentials for warmup.
 
-Финальный образ содержит PHP runtime, Symfony production dependencies и frontend `dist`; Node.js, frontend-исходники,
-PHPUnit/PHPStan/CS-Fixer и Composer CLI в финальный runtime не входят. Приложение работает от пользователя `app` (UID
-1000), с writable `var` и volumes Caddy. Включены OPcache и realpath cache, Composer classmap authoritative, прогрев
-prod cache и FrankenPHP worker mode; Xdebug и JIT отсутствуют.
+The final image contains the PHP runtime, Symfony production dependencies, and the frontend `dist`; Node.js, frontend
+sources, PHPUnit/PHPStan/CS-Fixer, and the Composer CLI are not part of the final runtime. The application runs as the
+`app` user (UID 1000), with writable `var` and Caddy volumes. OPcache and realpath cache are enabled, Composer classmap
+authoritative, prod cache warmup, and FrankenPHP worker mode; Xdebug and JIT are absent.
 
-Caddy отдаёт хэшированные `/assets/*` с `Cache-Control: public, max-age=31536000, immutable`, а `index.html` — с
-revalidation `no-cache`. API получает `no-store`. Сжатие статики и security headers настроены в Caddy; dev-конфигурация
-сохраняет работу Vite HMR. При обновлении PHP-кода production workers перезапускают: OPcache timestamp validation
-отключена.
+Caddy serves hashed `/assets/*` with `Cache-Control: public, max-age=31536000, immutable`, and `index.html` with
+`no-cache` revalidation. The API gets `no-store`. Static compression and security headers are configured in Caddy; the
+dev configuration keeps Vite HMR working. When PHP code is updated, production workers must be restarted: OPcache
+timestamp validation is disabled.
 
-Остановка production сохраняет volumes:
+Stopping production keeps volumes:
 
 ```sh
 ./dev prod-down
 ```
 
-Для другого env-файла используйте `PROD_ENV=/absolute/path/to/environment-file ./dev prod-up` либо `make prod-up
+For a different env file use `PROD_ENV=/absolute/path/to/environment-file ./dev prod-up` or `make prod-up
 PROD_ENV=/absolute/path/to/environment-file`.
 
-## Worker mode, ресурсы и будущая нагрузка
+## Worker mode, resources, and future load
 
-FrankenPHP worker mode сохраняет PHP-процесс между запросами. Symfony 8.1 поддерживает его через native runtime и
-сбрасывает известное состояние; собственные сервисы не хранят request/user state — только ограниченное операционное
-состояние (например, уже отправленные предупреждения логов). Не сохраняйте Request, авторизацию, транзакцию или данные
-отдельного запроса в mutable/static-полях долгоживущих сервисов. Корректность проверяют последовательными запросами с
-разными контекстами и после ошибок.
+FrankenPHP worker mode keeps the PHP process alive between requests. Symfony 8.1 supports it through the native
+runtime and resets known state; the project's own services do not keep request/user state — only bounded operational
+state (for example, already-emitted log warnings). Do not store the Request, authorization, a transaction, or data
+from an individual request in mutable/static fields of long-lived services. Correctness is verified by sequential
+requests with different contexts and after errors.
 
-Для lazy Redis provider явно зарегистрирован `kernel.reset`: factory возвращает стандартный resettable proxy, но
-объявленный тип `Redis` скрывает этот интерфейс от autoconfiguration. Это предотвращает сохранение потерянного
-соединения после перезапуска Redis; regression test проверяет readiness и чтение кэша через тот же kernel и cache
-service. Native Symfony runtime также автоматически обновляет worker после 500 запросов по умолчанию.
+For the lazy Redis provider a `kernel.reset` is registered explicitly: the factory returns the standard resettable
+proxy, but the declared `Redis` type hides this interface from autoconfiguration. This prevents keeping a lost
+connection after a Redis restart; a regression test verifies readiness and cache reads through the same kernel and
+cache service. The native Symfony runtime also automatically refreshes the worker after 500 requests by default.
 
-Стартовые лимиты консервативные: два web workers, максимум четыре PHP threads, web PHP memory limit 128 МБ при container
-limit 768 МБ и 1 CPU. Для Messenger задаётся отдельный PHP limit 256 МБ, мягкий лимит consumer 128 МБ и container limit
-384 МБ. `num_threads` FrankenPHP добавляет обычные PHP threads поверх workers, а `max_threads` ограничивает их суммарное
-количество. PHP memory limit ограничивает отдельное выполнение, а не весь контейнер; cache/runtime overhead также
-занимает память.
+Starting limits are conservative: two web workers, a maximum of four PHP threads, web PHP memory limit 128 MB against
+a container limit of 768 MB and 1 CPU. Messenger gets a separate PHP limit of 256 MB, a soft consumer limit of 128 MB,
+and a container limit of 384 MB. FrankenPHP `num_threads` adds regular PHP threads on top of the workers, while
+`max_threads` caps their total. The PHP memory limit bounds a single execution, not the whole container;
+cache/runtime overhead also consumes memory.
 
-Worker count, PostgreSQL connections, SQL timeout и Redis memory уточняются измерениями на целевом VPS. Бюджет
-PostgreSQL учитывает web-реплики, consumers, migrations и служебные подключения; увеличение workers само по себе не
-ускоряет систему. Рост каталога потребует анализа схемы и запросов, индексов, пагинации, import batches и памяти ORM.
+Worker count, PostgreSQL connections, SQL timeout, and Redis memory are refined by measurements on the target VPS.
+The PostgreSQL budget accounts for web replicas, consumers, migrations, and maintenance connections; increasing
+workers by itself does not speed up the system. Catalog growth will require analyzing schema and queries, indexes,
+pagination, import batches, and ORM memory.
 
-Место для измерений — [tests/performance/README.md](tests/performance/README.md). Минимальный k6 smoke делает три
-запроса одним VU к liveness:
+Performance testing guidance lives in [tests/performance/README.md](tests/performance/README.md). A minimal k6 smoke makes
+three requests with one VU against liveness:
 
 ```sh
 k6 run tests/performance/health-smoke.js
 ```
 
-k6 устанавливается отдельно. Smoke подтверждает HTTP-контракт, не производительность магазина. Полноценную нагрузку
-запускают отдельно на разрешённом target с реальными сценариями и наблюдаемостью origin/CDN.
+k6 is installed separately. The smoke verifies the HTTP contract, not the store's performance. Run a real load test
+separately on an authorized target with realistic scenarios and origin/CDN observability.
 
-## Резервное копирование и эксплуатационные ограничения
+## Backups and operational limits
 
-Постоянный Docker volume обеспечивает хранение данных между перезапусками, но не заменяет backup. До реального
-production-запуска обязательны регулярные PostgreSQL backups, защищённое хранение вне VPS, retention и проверяемое
-восстановление. Схема и очередь Messenger находятся в одной базе и попадают в её backup; Redis cache резервного
-копирования не требует.
+A persistent Docker volume preserves data across restarts but does not replace a backup. Before a real production
+launch you must have regular PostgreSQL backups, protected storage off the VPS, retention, and verified restore. The
+schema and the Messenger queue live in the same database and are covered by its backup; the Redis cache requires no
+backup.
 
-Пример ручного логического backup без публикации порта базы:
+Example of a manual logical backup without publishing the database port:
 
 ```sh
 mkdir -p backups
@@ -526,29 +533,29 @@ docker compose --env-file .env.prod.local -f compose.yaml -f compose.prod.yaml \
     exec -T postgres sh -c 'exec pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "$backup_file"
 ```
 
-Это пример операции, а не установленная система резервирования. Каталог `backups/` игнорируется Git; production-дампы
-могут содержать конфиденциальные данные. Восстановление проверяют в отдельной среде; RPO/RTO, PITR, мониторинг, ротация
-секретов и rolling deployment сейчас не реализованы.
+This is an example operation, not an installed backup system. The `backups/` directory is Git-ignored; production
+dumps may contain confidential data. Test restores in a separate environment; RPO/RTO, PITR, monitoring, secret
+rotation, and rolling deployment are not currently implemented.
 
-Compose рассчитан на локальную разработку и стартовое развёртывание на одном хосте. Высокая доступность PostgreSQL,
-orchestration нескольких VPS, поисковый индекс и CDN caching остаются следующими решениями. Внешние сервисы не
-устанавливаются автоматически.
+Compose is designed for local development and an initial single-host deployment. PostgreSQL high availability,
+multi-VPS orchestration, a search index, and CDN caching remain future decisions. External services are not installed
+automatically.
 
-## Отложено и дальнейшие шаги
+## Deferred items and next steps
 
-- Платёжные строки 13/14/18 blueprint (Shop Pay, входящий Shopify webhook, payment reconciliation) отложены решением
-  пользователя от 2026-10-13. Нейтральный foundation сохранён; статусы — в
+- Payment lines 13/14/18 of the blueprint (Shop Pay, inbound Shopify webhook, payment reconciliation) were deferred
+  by user decision dated 2026-10-13. The neutral foundation is retained; statuses are in
   [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
-- Перед production-запуском требуются реальные `MAILER_DSN`/`MAILER_FROM`, credentials источников курсов
-  (`WALUTOMAT_API_TOKEN`) и review провайдера `GEOIP_URL`.
-- `APP_FIELD_CIPHER_KEY` в production генерируется отдельно (`openssl rand -base64 32`) до включения платёжных
-  компонентов.
-- `LOCK_DSN=flock` годится для одного хоста; multi-replica deployment требует shared lock store.
-- Legacy-приложение `blog-api/` остаётся в репозитории как источник миграции; его удаление требует отдельного явного
-  согласования — сейчас удалять его не нужно.
+- Before the production launch, real `MAILER_DSN`/`MAILER_FROM`, rate-source credentials
+  (`WALUTOMAT_API_TOKEN`), and a review of the `GEOIP_URL` provider are required.
+- `APP_FIELD_CIPHER_KEY` in production is generated separately (`openssl rand -base64 32`) before enabling payment
+  components.
+- `LOCK_DSN=flock` suits a single host; a multi-replica deployment requires a shared lock store.
+- The legacy application `blog-api/` remains in the repository as the migration source; removing it requires
+  separate explicit approval — do not delete it now.
 
-Документы: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/LEGACY_MIGRATION_PLAN.md](docs/LEGACY_MIGRATION_PLAN.md),
+Documents: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/LEGACY_MIGRATION_PLAN.md](docs/LEGACY_MIGRATION_PLAN.md),
 [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md), [docs/DEVELOPMENT_DATA.md](docs/DEVELOPMENT_DATA.md),
 [openapi/openapi.yaml](openapi/openapi.yaml).
 
-Push и PR не создаются автоматически.
+No pushes or PRs are created automatically.
