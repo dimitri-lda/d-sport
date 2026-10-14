@@ -176,6 +176,11 @@ it('renders the storefront home with navigation and featured products', async ()
   ).toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Shop' })).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Log in' })).toBeInTheDocument();
+  // Registration is reachable from the login page only, not the storefront nav.
+  expect(
+    screen.queryByRole('link', { name: 'Sign up' }),
+  ).not.toBeInTheDocument();
   expect(screen.getByRole('link', { name: /Footwear/ })).toBeInTheDocument();
   expect(fetch).toHaveBeenCalledWith(
     '/api/v1/context',

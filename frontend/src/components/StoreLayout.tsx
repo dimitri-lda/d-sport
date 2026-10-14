@@ -57,22 +57,13 @@ export function StoreLayout() {
         ) : null}
       </NavLink>
       {user === null ? (
-        <>
-          <NavLink
-            to="/login"
-            className={navLinkClass}
-            onClick={() => setMenuOpen(false)}
-          >
-            {t.nav.login}
-          </NavLink>
-          <NavLink
-            to="/register"
-            className={navLinkClass}
-            onClick={() => setMenuOpen(false)}
-          >
-            {t.nav.register}
-          </NavLink>
-        </>
+        <NavLink
+          to="/login"
+          className={navLinkClass}
+          onClick={() => setMenuOpen(false)}
+        >
+          {t.nav.login}
+        </NavLink>
       ) : (
         <>
           <NavLink
