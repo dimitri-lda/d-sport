@@ -179,6 +179,30 @@ describe('identity pages', () => {
     client.clear();
   });
 
+  it('logs out and refreshes the context to the anonymous state', async () => {
+    const fetch = mockFetch({ loggedIn: true });
+    const client = renderApp('/');
+
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Log out' }),
+    );
+
+    // A stale cached context must not survive logout: the nav reverts to
+    // the anonymous state only after a forced server refresh.
+    expect(
+      await screen.findByRole('link', { name: 'Log in' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Log out' }),
+    ).not.toBeInTheDocument();
+
+    const contextCalls = fetch.mock.calls.filter(
+      (call) => String(call[0]) === '/api/v1/context',
+    );
+    expect(contextCalls).toHaveLength(2);
+    client.clear();
+  });
+
   it('shows a localized error when credentials are invalid', async () => {
     mockFetch({ loginStatus: 401 });
     const client = renderApp('/login');

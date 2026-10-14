@@ -24,6 +24,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const payload = await queryClient.fetchQuery<ContextPayload>({
           queryKey: CONTEXT_KEY,
           queryFn: ({ signal }) => getContext(signal),
+          // An explicit refresh must hit the server — the global staleTime
+          // would otherwise return the stale authenticated context (e.g.
+          // immediately after logout).
+          staleTime: 0,
         });
 
         return payload;
